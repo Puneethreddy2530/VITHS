@@ -1,0 +1,29 @@
+# Core API
+fastapi==0.135.2
+uvicorn==0.42.0
+python-dotenv==1.2.2
+
+# Computer Vision
+opencv-python==4.13.0.92
+ultralytics==8.4.30
+pillow==12.1.1
+
+# Deep Learning / CLIP
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+transformers==5.4.0
+
+# ML / Vector Search
+faiss-cpu==1.13.2
+scikit-learn==1.6.1
+numpy==2.4.3
+
+# Gemini AI
+google-generativeai==0.8.6
+
+# Visualization (scripts)
+matplotlib==3.10.3
+
+# Misc
+requests==2.33.0
+websockets==16.0
