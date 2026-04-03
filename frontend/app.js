@@ -25,36 +25,40 @@ let _latestEvent = null;
 let _placements  = {};
 let _zoneBehaviors = {};
 
-/* ── SVG Zone Definitions — Triangular Hostel ──────────────── */
+/* ── SVG Zone Definitions — Hexagonal Shield Architecture ──────────────── */
 const ZONE_DEFS = [
-  // Outer wing rooms (6 zones along perimeter)
-  { id:0,  pts:"500,40 730,450 670,485 500,195",       label:"B1",  cat:"outer", cx:600, cy:293 },
-  { id:1,  pts:"730,450 960,860 840,775 670,485",      label:"B2",  cat:"outer", cx:800, cy:643 },
-  { id:2,  pts:"960,860 600,860 585,775 840,775",      label:"B3",  cat:"outer", cx:746, cy:818 },
-  { id:3,  pts:"400,860 40,860 165,775 415,775",       label:"B4",  cat:"outer", cx:255, cy:818 },
-  { id:4,  pts:"40,860 270,450 332,485 165,775",       label:"B5",  cat:"outer", cx:202, cy:643 },
-  { id:5,  pts:"270,450 500,40 500,195 332,485",       label:"B6",  cat:"outer", cx:400, cy:293 },
-  // Inner corridor rooms (6 zones)
-  { id:6,  pts:"500,195 670,485 605,518 500,345",      label:"B7",  cat:"inner", cx:569, cy:386 },
-  { id:7,  pts:"670,485 840,775 710,690 605,518",      label:"B8",  cat:"inner", cx:706, cy:617 },
-  { id:8,  pts:"840,775 585,775 570,690 710,690",      label:"B9",  cat:"inner", cx:676, cy:733 },
-  { id:9,  pts:"415,775 165,775 290,690 430,690",      label:"B10", cat:"inner", cx:325, cy:733 },
-  { id:10, pts:"165,775 332,485 395,518 290,690",      label:"B11", cat:"inner", cx:296, cy:617 },
-  { id:11, pts:"332,485 500,195 500,345 395,518",      label:"B12", cat:"inner", cx:432, cy:386 },
-  // Center zones (courtyard / common areas)
-  { id:12, pts:"500,345 605,518 500,575 395,518",      label:"C1",  cat:"center", cx:500, cy:489 },
-  { id:13, pts:"605,518 710,690 500,690 500,575",      label:"C2",  cat:"center", cx:579, cy:618 },
-  { id:14, pts:"500,690 290,690 395,518 500,575",      label:"C3",  cat:"center", cx:421, cy:618 },
-  // Entrance gate
-  { id:15, pts:"400,860 600,860 585,775 415,775",      label:"Gate", cat:"entrance", cx:500, cy:818 },
+  // Top Edge
+  { id:0,  pts:"400,100 500,100 500,220 440,220",    label:"B1", cat:"north",  cx:460, cy:160 },
+  { id:1,  pts:"500,100 600,100 560,220 500,220",    label:"B2", cat:"north",  cx:540, cy:160 },
+
+  // Top-Right Flare
+  { id:2,  pts:"600,100 683,217 610,297 560,220",    label:"B3", cat:"corner", cx:613, cy:208 },
+  { id:3,  pts:"683,217 766,333 660,373 610,297",    label:"B4", cat:"east",   cx:680, cy:305 },
+  { id:4,  pts:"766,333 850,450 710,450 660,373",    label:"B5", cat:"east",   cx:746, cy:401 },
+
+  // Bottom-Right Taper
+  { id:5,  pts:"850,450 800,567 673,527 710,450",    label:"B6", cat:"east",   cx:758, cy:498 },
+  { id:6,  pts:"800,567 750,683 636,603 673,527",    label:"B7", cat:"corner", cx:715, cy:595 },
+  { id:7,  pts:"750,683 700,800 600,680 636,603",    label:"B8", cat:"south",  cx:671, cy:691 },
+
+  // Bottom Edge
+  { id:8,  pts:"700,800 500,800 500,680 600,680",    label:"B9", cat:"south",  cx:575, cy:740 },
+  { id:9,  pts:"500,800 300,800 400,680 500,680",    label:"B10", cat:"south",  cx:425, cy:740 },
+
+  // Bottom-Left Taper
+  { id:10, pts:"300,800 250,683 363,603 400,680",    label:"B11", cat:"corner", cx:328, cy:691 },
+  { id:11, pts:"250,683 200,567 326,527 363,603",    label:"B12", cat:"west",   cx:285, cy:595 },
+  { id:12, pts:"200,567 150,450 290,450 326,527",    label:"B13", cat:"west",   cx:241, cy:498 },
+
+  // Top-Left Flare
+  { id:13, pts:"150,450 233,333 340,373 290,450",    label:"B14", cat:"west",   cx:253, cy:401 },
+  { id:14, pts:"233,333 317,217 390,297 340,373",    label:"B15", cat:"corner", cx:320, cy:305 },
+  { id:15, pts:"317,217 400,100 440,220 390,297",    label:"Gate", cat:"entrance", cx:387, cy:208 },
 ];
 
-// Adjacency for quantum diffusion glow
 const ZONE_ADJ = {
-  0:[1,5,6,11], 1:[0,2,7,6], 2:[1,3,8,15], 3:[2,4,9,15],
-  4:[3,5,10,9], 5:[0,4,11,10], 6:[0,1,7,11,12], 7:[1,6,8,13],
-  8:[2,7,9,13], 9:[3,8,10,14], 10:[4,5,9,11,14], 11:[0,5,6,10,12],
-  12:[6,11,13,14], 13:[7,8,12,14], 14:[9,10,12,13], 15:[2,3]
+  0:[15,1], 1:[0,2], 2:[1,3], 3:[2,4], 4:[3,5], 5:[4,6], 6:[5,7], 7:[6,8],
+  8:[7,9], 9:[8,10], 10:[9,11], 11:[10,12], 12:[11,13], 13:[12,14], 14:[13,15], 15:[14,0]
 };
 
 /* ── Zone runtime state ───────────────────────────────────── */
@@ -204,9 +208,35 @@ function renderPixelHeatmap() {
   // Clear the canvas for the new frame
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // --- NEW: Hexagonal Shield Clipping Mask ---
+  ctx.save();
+  ctx.beginPath();
+
+  // 1. Draw Outer Shield (Clockwise)
+  ctx.moveTo(400, 100); // Top Left
+  ctx.lineTo(600, 100); // Top Right
+  ctx.lineTo(850, 450); // Mid Right
+  ctx.lineTo(700, 800); // Bottom Right
+  ctx.lineTo(300, 800); // Bottom Left
+  ctx.lineTo(150, 450); // Mid Left
+  ctx.closePath();
+
+  // 2. Draw Inner Courtyard Hole (Counter-Clockwise to punch out)
+  ctx.moveTo(440, 220); // Inner Top Left
+  ctx.lineTo(290, 450); // Inner Mid Left
+  ctx.lineTo(400, 680); // Inner Bottom Left
+  ctx.lineTo(600, 680); // Inner Bottom Right
+  ctx.lineTo(710, 450); // Inner Mid Right
+  ctx.lineTo(560, 220); // Inner Top Right
+  ctx.closePath();
+
+  // 3. Clip using "evenodd"
+  ctx.clip("evenodd");
+  // -------------------------------------------------
+
   // Configuration
-  const PIXEL_SIZE = 18; // Size of the blocky "pixels"
-  const SIGMA = 120;     // Gaussian spread radius (how far probability bleeds)
+  const PIXEL_SIZE = 18;
+  const SIGMA = 120;
 
   const cols = Math.ceil(canvas.width / PIXEL_SIZE);
   const rows = Math.ceil(canvas.height / PIXEL_SIZE);
@@ -221,7 +251,10 @@ function renderPixelHeatmap() {
     };
   }).filter(z => z.psi > 0.01 || z.score > 0.1);
 
-  if (activeZones.length === 0) return; // Nothing to draw
+  if (activeZones.length === 0) {
+    ctx.restore(); // Make sure to restore before returning early!
+    return;
+  }
 
   // Loop through every pixel in the grid
   for (let x = 0; x < cols; x++) {
@@ -231,33 +264,26 @@ function renderPixelHeatmap() {
 
       let pixelProbability = 0;
 
-      // Calculate Gaussian influence from all active zones
       for (const zone of activeZones) {
         const dx = px - zone.cx;
         const dy = py - zone.cy;
         const distSq = dx * dx + dy * dy;
 
-        // Gaussian function: e^(-(d^2) / (2 * sigma^2))
         const influence = Math.exp(-distSq / (2 * SIGMA * SIGMA));
-
-        // Combine Quantum probability (psi) and ST-GCN score
         const weight = Math.max(zone.psi * 2.0, zone.score);
         pixelProbability += influence * weight;
       }
 
-      // Only draw if there is a meaningful probability
       if (pixelProbability > 0.05) {
-        // Cap probability for color mapping
         const t = Math.min(1.0, pixelProbability);
-
-        // Get Inferno color (using the existing getInfernoColor function)
         ctx.fillStyle = getInfernoColor(t, 0.75 + (t * 0.25));
-
-        // Draw the blocky pixel
         ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE - 1, PIXEL_SIZE - 1);
       }
     }
   }
+
+  // --- NEW: Restore context state ---
+  ctx.restore();
 }
 
 function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {

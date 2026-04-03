@@ -230,7 +230,6 @@ body {
   stroke-width: 2;
 }
 .inner-wall { stroke: #222230; stroke-width: 1.5; stroke-dasharray: 6 3; }
-.innermost-wall { stroke: #1e1e28; stroke-width: 1; stroke-dasharray: 4 4; }
 .zone-poly {
   fill: transparent;
   stroke: rgba(52,211,153,0.35);

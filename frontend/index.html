@@ -105,7 +105,7 @@
     <!-- Hostel SVG Heatmap -->
     <div class="card svg-map-card">
       <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span>Hostel Block Heatmap — Triangular Layout</span>
+        <span>D1 Block — Hexagonal Shield (concentric ring)</span>
         <span id="quantum-state-badge" style="font-size:10px; color:#666;">ψ idle</span>
       </div>
       <div class="svg-map-container" id="svg-map-container">
@@ -137,10 +137,9 @@
               </feMerge>
             </filter>
           </defs>
-          <!-- Building outline -->
-          <polygon class="building-wall" points="500,40 40,860 960,860" />
-          <polygon class="building-wall inner-wall" points="500,195 165,775 840,775" />
-          <polygon class="building-wall innermost-wall" points="500,345 290,690 710,690" />
+          <!-- Building outline: hex shield outer + inner courtyard -->
+          <polygon class="building-wall" points="400,100 600,100 850,450 700,800 300,800 150,450" />
+          <polygon class="building-wall inner-wall" points="440,220 560,220 710,450 600,680 400,680 290,450" />
           <!-- Zone polygons injected by app.js -->
           <g id="zone-polys"></g>
           <!-- Trajectory path -->
