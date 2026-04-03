@@ -126,6 +126,15 @@
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+            <filter id="glow-inferno">
+              <feGaussianBlur stdDeviation="12" result="blur1" />
+              <feGaussianBlur stdDeviation="25" result="blur2" />
+              <feMerge>
+                <feMergeNode in="blur2" />
+                <feMergeNode in="blur1" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
           </defs>
           <!-- Building outline -->
           <polygon class="building-wall" points="500,40 40,860 960,860" />

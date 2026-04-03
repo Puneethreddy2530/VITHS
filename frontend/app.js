@@ -170,11 +170,36 @@ function updateQuantum(quantum) {
   // handled by updateQuantumOverlay for SVG
 }
 
-// Track timeouts per zone safely
-const QUANTUM_TIMEOUTS = {};
+/* ── Inferno Colormap for Quantum Probability ──────────────── */
+function getInfernoColor(t, alpha = 0.8) {
+  t = Math.max(0, Math.min(1, t));
+  const stops = [
+    { t: 0.00, r: 0,   g: 0,   b: 4 },
+    { t: 0.15, r: 40,  g: 11,  b: 84 },
+    { t: 0.30, r: 101, g: 21,  b: 110 },
+    { t: 0.45, r: 159, g: 42,  b: 99 },
+    { t: 0.60, r: 212, g: 72,  b: 66 },
+    { t: 0.75, r: 245, g: 124, b: 21 },
+    { t: 0.90, r: 250, g: 193, b: 39 },
+    { t: 1.00, r: 252, g: 255, b: 164 }
+  ];
+  let i = 1;
+  while (i < stops.length && stops[i].t < t) i++;
+  const s1 = stops[i - 1];
+  const s2 = stops[i];
+  const factor = (t - s1.t) / (s2.t - s1.t);
+  const r = Math.round(s1.r + factor * (s2.r - s1.r));
+  const g = Math.round(s1.g + factor * (s2.g - s1.g));
+  const b = Math.round(s1.b + factor * (s2.b - s1.b));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
   if (!quantumField) return;
+
+  // Determine if the quantum tracker is actively pushing probabilities
+  const isQuantumActive = quantumState === 'diffusing' || quantumState === 'collapsed' || quantumState === 'tracking';
+
   quantumField.forEach(({ zone_id, probability }) => {
     const poly = document.getElementById('zpoly-' + zone_id);
     const ptxt = document.getElementById('zpsi-' + zone_id);
@@ -182,43 +207,52 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
 
     _zoneState[zone_id] = { ..._zoneState[zone_id], psi: probability };
 
-    if (probability > 0.05) {
-      if (ptxt) ptxt.textContent = `ψ ${probability.toFixed(2)}`;
-      
-      if (quantumState === 'diffusing') {
-        poly.classList.add('quantum-diffusing');
-        
-        // Use a zone-specific timeout rather than a global blanket wipe
-        clearTimeout(QUANTUM_TIMEOUTS[zone_id]);
-        QUANTUM_TIMEOUTS[zone_id] = setTimeout(() => {
-           poly.classList.remove('quantum-diffusing');
-        }, 3000);
-
-        // Also pulse neighbors safely
-        for (const nbr of (ZONE_ADJ[zone_id] || [])) {
-          const np = document.getElementById('zpoly-' + nbr);
-          if (np && probability > 0.15) {
-            np.classList.add('quantum-diffusing');
-            clearTimeout(QUANTUM_TIMEOUTS[nbr]);
-            QUANTUM_TIMEOUTS[nbr] = setTimeout(() => {
-                np.classList.remove('quantum-diffusing');
-            }, 3000);
-          }
-        }
+    if (isQuantumActive && probability > 0.01) {
+      if (ptxt) {
+        ptxt.textContent = `ψ ${probability.toFixed(2)}`;
+        ptxt.style.fill = getInfernoColor(Math.min(1.0, probability + 0.3), 1.0); // Make text pop
       }
+
+      // 1. Calculate Inferno Colors based on absolute probability
+      // Boost probability visually so it looks intense even at 0.4
+      const visualT = Math.min(1.0, probability * 1.8);
+      const fillAlpha = 0.25 + (visualT * 0.65);
+      const strokeAlpha = 0.6 + (visualT * 0.4);
+
+      poly.style.fill = getInfernoColor(visualT, fillAlpha);
+      poly.style.stroke = getInfernoColor(visualT, strokeAlpha);
+
+      // 2. Add burning SVG aura to the highest probability hotspots
+      if (probability > 0.15) {
+        poly.style.filter = 'url(#glow-inferno)';
+        poly.style.strokeWidth = 3;
+      } else {
+        poly.style.filter = 'none';
+        poly.style.strokeWidth = 1;
+      }
+
     } else {
+      // 3. Gracefully fallback to the ST-GCN Heatmap if quantum field is empty/idle
       if (ptxt) ptxt.textContent = '';
-      poly.classList.remove('quantum-diffusing');
+      poly.style.filter = 'none';
+      const st = _zoneState[zone_id];
+      poly.style.fill = scoreToFill(st.score, st.risk);
+      poly.style.stroke = scoreToStroke(st.score, st.risk);
+      poly.style.strokeWidth = 1;
     }
   });
 
-  // Note: The global setTimeout block that was here previously has been completely removed.
-
+  // 4. Update the Quantum Badge UI to match the Inferno aesthetic
   const badge = document.getElementById('quantum-state-badge');
   if (badge) {
-    const colors = { tracking:'#34d399', diffusing:'#a78bfa', collapsed:'#f59e0b', idle:'#444' };
+    const colors = { tracking:'#34d399', diffusing:'#f98c0a', collapsed:'#e35933', idle:'#555' };
     badge.textContent = `ψ ${quantumState || 'idle'} · H=${(quantumEntropy || 0).toFixed(2)}`;
     badge.style.color = colors[quantumState] || '#666';
+    if (quantumState === 'diffusing') {
+      badge.style.textShadow = "0 0 10px rgba(249, 140, 10, 0.6)";
+    } else {
+      badge.style.textShadow = "none";
+    }
   }
 }
 
