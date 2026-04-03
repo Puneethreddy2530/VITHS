@@ -1,12 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PS-003 Dashboard</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PS-003 Intrusion Monitor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ───────────────────────────────────────────────── -->
+  <div class="header">
+    <div>
+      <h1>PS-003 Intrusion Monitor</h1>
+      <p class="header-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC</p>
+    </div>
+    <div class="header-right">
+      <div class="privacy-badge">🔐 Privacy 100% · No faces · PQC Signed</div>
+      <div id="system-state" style="display:flex; align-items:center; gap:6px;
+           font-size:11px; padding:4px 12px; border-radius:20px;
+           background:#1a1a22; border:1px solid #222;">
+        <span id="system-dot" style="width:7px; height:7px; border-radius:50%;
+              background:#444; transition:background 0.5s; flex-shrink:0;"></span>
+        <span id="system-label" style="color:#555;">Neuromorphic — idle</span>
+      </div>
+      <div class="status-pill">
+        <span id="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STATS ROW ─────────────────────────────────────────────── -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total" style="color:#7F77DD">0</div>
+      <div class="stat-label">Total Alerts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-memory" style="color:#1D9E75">0</div>
+      <div class="stat-label">Memory Events</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:#EF9F27">16</div>
+      <div class="stat-label">Zones Monitored</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color:#D85A30">8</div>
+      <div class="stat-label">Papers Cited</div>
+    </div>
+  </div>
+
+  <!-- ── LIVE CAMERA FEED ───────────────────────────────────────── -->
+  <div class="card">
+    <div class="video-header">
+      <span class="card-title" style="margin:0">Live Camera Feed (Annotated)</span>
+      <span class="on-air">● ON AIR</span>
+    </div>
+    <div class="video-wrap">
+      <img src="http://localhost:8000/video_feed" alt="Live security stream" />
+    </div>
+  </div>
+
+  <!-- ── MAIN GRID ─────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- Heatmap -->
+    <div class="card">
+      <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Hostel Block Heatmap (ST-GCN propagation)</span>
+        <span id="quantum-state-badge" style="font-size:11px; color:#888;">ψ idle</span>
+      </div>
+      <div class="heatmap-grid" id="heatmap-grid">
+        <!-- 16 zone cells injected by app.js -->
+      </div>
+      <div class="heatmap-legend">
+        <span><span class="legend-swatch" style="background:#1D9E75"></span>LOW</span>
+        <span><span class="legend-swatch" style="background:#EF9F27"></span>MEDIUM</span>
+        <span><span class="legend-swatch" style="background:#E24B4A"></span>HIGH</span>
+      </div>
+    </div>
+
+    <!-- Latest alert card -->
+    <div class="card">
+      <div class="card-title">Latest Alert — Gemini Analysis</div>
+      <div id="alert-card">
+        <p class="alert-waiting">Waiting for events...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── EVENT FEED ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Incident Feed — PQC Signed</div>
+    <div class="feed-scroll" id="event-feed">
+      <p class="feed-empty" id="feed-empty">No events yet</p>
+    </div>
+  </div>
+
+  <!-- ── PHYSICS + VIDEO ROW ───────────────────────────────────── -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+
+    <!-- Physics Readout Panel -->
+    <div class="panel" id="physics-panel">
+      <div class="panel-title">Physics Engine — real-time</div>
+      <div class="physics-row">
+        <span class="phys-label">Divergence</span>
+        <span id="phys-div">—</span>
+        <span class="phys-tag" id="phys-div-tag"></span>
+      </div>
+      <div class="physics-row">
+        <span class="phys-label">Curl</span>
+        <span id="phys-curl">—</span>
+        <span class="phys-tag" id="phys-curl-tag"></span>
+      </div>
+      <div class="physics-row">
+        <span class="phys-label">Lyapunov λ</span>
+        <span id="phys-lyap">—</span>
+        <span class="phys-tag" id="phys-lyap-tag"></span>
+      </div>
+    </div>
+
+    <!-- Live Feed — physics overlay -->
+    <div class="panel">
+      <div class="panel-title">Live Feed — physics overlay</div>
+      <img id="video-feed"
+           src="http://localhost:8000/video_feed"
+           style="width:100%; border-radius:8px; display:block;"
+           onerror="this.style.opacity='0.3'; this.alt='No camera'"/>
+      <div style="font-size:11px; color:#555; margin-top:6px;">
+        Divergence · Curl · Lyapunov · No facial recognition
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── TAMPER DEMO ─────────────────────────────────────────────── -->
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-title">PQC Tamper Detection — Judge Demo</div>
+    <button id="tamper-btn" onclick="runTamperDemo()"
+      style="padding:8px 16px; background:#12121a; border:1px solid #333;
+             color:#ccc; border-radius:8px; cursor:pointer; font-size:12px;">
+      Run tamper demo
+    </button>
+    <div id="tamper-result" style="font-size:12px; margin-top:8px; line-height:1.8;"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
 </html>

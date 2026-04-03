@@ -34,9 +34,10 @@ PKGS = [
     ("faiss",               "FAISS"),
     ("fastapi",             "FastAPI"),
     ("uvicorn",             "Uvicorn"),
-    ("sqlalchemy",          "SQLAlchemy"),
+    ("dotenv",              "python-dotenv"),
     ("google.generativeai", "Gemini SDK"),
     ("PIL",                 "Pillow"),
+    ("pyttsx3",             "pyttsx3 TTS (voice alerts)"),
 ]
 print("── Packages ──────────────────────────")
 for pkg, name in PKGS:

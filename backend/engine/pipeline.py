@@ -251,12 +251,15 @@ class Pipeline:
     Single entry point: pipeline.process(frame, zone_id) → event dict
     """
     def __init__(self):
-        from backend.engine.detector import Detector
+        from backend.engine.detector       import Detector
+        from backend.engine.quantum_tracker import SchrodingerTracker
         self.detector   = Detector()
         self.behavior   = BehaviorClassifier()
         self.threshold  = AQHSOThreshold()
         self.propagator = STGCNPropagator()
         self.patterns   = PatternTracker()
+        # Quantum tracker — one per pipeline (tracks a single intruder)
+        self.q_tracker  = SchrodingerTracker(n_zones=16, grid_w=4)
 
     def process(self, frame_bgr, zone_id: int = 0) -> dict:
         # Phase 1 detection
@@ -273,6 +276,19 @@ class Pipeline:
              result["iforest_score"] < thresholds["iforest"]) or
             any(d["class"] != "person" for d in result["yolo_detections"])
         )
+
+        # ── Schrödinger Tracker update ───────────────────────────────
+        # A "person" detection in the YOLO list collapses the wavefunction.
+        # No person detected → diffuse the probability field one step.
+        person_dets = [d for d in result["yolo_detections"] if d["class"] == "person"]
+        if person_dets:
+            self.q_tracker.detect(zone_id)   # collapse ψ → δ(zone_id)
+        else:
+            if self.q_tracker.tracking:
+                self.q_tracker.lose()         # signal loss of track
+            self.q_tracker.diffuse()          # spread ψ across neighbours
+
+        quantum_state = self.q_tracker.state_summary()
 
         # Behavior classification
         behavior       = self.behavior.classify(result)
@@ -296,6 +312,8 @@ class Pipeline:
             "pattern":         pattern,
             "thresholds":      thresholds,
             "heatmap":         self.propagator.heatmap(),
+            # Quantum tracker output — drives the wavefunction heatmap overlay
+            "quantum":         quantum_state,
         })
         return result
 

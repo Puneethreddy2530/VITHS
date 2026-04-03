@@ -11,7 +11,7 @@ Endpoints:
 Usage: python phase5/main.py
        then open http://localhost:8000/docs
 """
-import sys, os, asyncio, json, time
+import sys, os, asyncio, json, time, threading, random, copy
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cv2
@@ -26,14 +26,69 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # ── Lazy imports (models load once on startup) ─────────────────────
-pipeline_instance = None
-memory_instance   = None
+pipeline_instance  = None
+memory_instance    = None
 reasoning_instance = None
-latest_frame      = None
+latest_frame       = None
+
+from backend.core.security import sign_event, verify_event
 
 app = FastAPI(title="PS-003 AI Intrusion Monitor", version="1.0.0")
 app.add_middleware(CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ── Voice dispatch (pyttsx3) ───────────────────────────────────────
+try:
+    import pyttsx3 as _pyttsx3
+    _tts = _pyttsx3.init()
+    _tts.setProperty("rate", 160)   # words-per-minute; 160 is clear at 30fps
+    _TTS_AVAILABLE = True
+except Exception as _e:
+    print(f"[WARN] pyttsx3 unavailable — voice alerts disabled ({_e})")
+    _TTS_AVAILABLE = False
+
+# Per-zone cooldown: don't repeat the same zone within 60 s
+_tts_last_spoken: dict[int, float] = {}
+_TTS_COOLDOWN = 60.0   # seconds
+
+def speak_alert(zone_id: int, risk: str, behavior: str):
+    """
+    Fire-and-forget TTS alert on a daemon thread so it never blocks
+    the async FastAPI event loop.
+    Only speaks if pyttsx3 is available and zone cooldown has elapsed.
+    """
+    if not _TTS_AVAILABLE:
+        return
+    now = time.time()
+    if now - _tts_last_spoken.get(zone_id, 0) < _TTS_COOLDOWN:
+        return   # cooldown active for this zone
+    _tts_last_spoken[zone_id] = now
+
+    def _speak():
+        msg = f"Alert. Zone {zone_id}. {behavior.replace('_', ' ')}. Risk level {risk}."
+        _tts.say(msg)
+        _tts.runAndWait()
+
+    threading.Thread(target=_speak, daemon=True).start()
+
+# ── Neuromorphic Event Gate ─────────────────────────────────────────
+class NeuromorphicGate:
+    def __init__(self, threshold=15):
+        self.threshold = threshold
+        self.prev_frame_gray = None
+        self.sleep_mode = False
+
+    def is_motion_event(self, frame):
+        gray = cv2.cvtColor(cv2.resize(frame, (160, 120)), cv2.COLOR_BGR2GRAY)
+        if self.prev_frame_gray is None:
+            self.prev_frame_gray = gray
+            return True
+        diff = cv2.absdiff(gray, self.prev_frame_gray).mean()
+        self.prev_frame_gray = gray
+        self.sleep_mode = diff < self.threshold
+        return not self.sleep_mode
+
+event_gate = NeuromorphicGate()
 
 # ── In-memory incident log (replace with DB in prod) ──────────────
 incident_log: deque = deque(maxlen=500)
@@ -69,11 +124,24 @@ async def camera_loop():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
+    last_sleep_mode = None
+
     while True:
         ret, frame = cap.read()
         if not ret:
             await asyncio.sleep(0.03)
             continue
+
+        if not event_gate.is_motion_event(frame):
+            if last_sleep_mode != True:
+                await broadcast_system_state(True)
+                last_sleep_mode = True
+            await asyncio.sleep(0.1)  # sleep 100ms instead of processing
+            continue
+
+        if last_sleep_mode != False:
+            await broadcast_system_state(False)
+            last_sleep_mode = False
 
         result = pipeline_instance.process(frame, zone_id=0)
         latest_frame = pipeline_instance.annotate(frame.copy(), result)
@@ -94,10 +162,11 @@ async def camera_loop():
 
 async def simulated_loop():
     """Simulates anomaly events for demo when no webcam."""
-    import random
     behaviors = ["loitering", "fast_movement", "animal", "erratic"]
     while True:
+        await broadcast_system_state(True)
         await asyncio.sleep(random.uniform(4, 10))
+        await broadcast_system_state(False)
         zone_id  = random.randint(0, 15)
         behavior = random.choice(behaviors)
         event = {
@@ -118,6 +187,16 @@ async def simulated_loop():
                 "recommended_action": "No real action needed (demo)",
             },
             "heatmap": [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)],
+            "quantum_field": [
+                {"zone_id": i, "probability": random.uniform(0, 0.15)
+                 if i != zone_id else random.uniform(0.6, 1.0)}
+                for i in range(16)
+            ],
+            "quantum_state":   random.choice(["tracking", "diffusing", "collapsed"]),
+            "quantum_entropy": round(random.uniform(0.1, 2.5), 3),
+            "divergence":      round(random.uniform(-1.0, 1.0), 4),
+            "curl":            round(random.uniform(-1.0, 1.0), 4),
+            "lyapunov":        round(random.uniform(-0.5, 0.8), 4),
             "simulated": True,
         }
         event["heatmap"][zone_id]["score"] = round(random.uniform(0.5, 1.0), 3)
@@ -128,7 +207,7 @@ async def simulated_loop():
 
 def build_event(enriched: dict, reasoning: dict) -> dict:
     pat = enriched.get("pattern") or {}
-    return {
+    event = {
         "id":              f"evt_{int(time.time()*1000)}",
         "timestamp":       enriched.get("timestamp", datetime.utcnow().isoformat()),
         "zone_id":         enriched.get("zone_id", 0),
@@ -141,11 +220,45 @@ def build_event(enriched: dict, reasoning: dict) -> dict:
         "pattern_label":   pat.get("label"),
         "reasoning":       reasoning,
         "heatmap":         enriched.get("heatmap", []),
+        # Physics / fluid-dynamics signals
+        "divergence":      enriched.get("divergence", 0.0),
+        "curl":            enriched.get("curl", 0.0),
+        "lyapunov":        enriched.get("lyapunov", 0.0),
+        # Schrödinger quantum tracker state
+        "quantum":         enriched.get("quantum", {}),
+        "quantum_field": [
+            {"zone_id": z["zone_id"], "probability": z["probability"]}
+            for z in (enriched.get("quantum", {}).get("field") or
+                      [{"zone_id": i, "probability": 0.0} for i in range(16)])
+        ],
+        "quantum_state":   enriched.get("quantum", {}).get("state", "idle"),
+        "quantum_entropy": enriched.get("quantum", {}).get("entropy", 0.0),
         "simulated":       False,
     }
+    return sign_event(event)
+
+
+async def broadcast_system_state(sleep_mode: bool):
+    msg = {"type": "system_state", "sleep_mode": sleep_mode}
+    dead = []
+    for ws in connected_ws:
+        try:
+            await ws.send_text(json.dumps(msg))
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        connected_ws.remove(ws)
 
 
 async def broadcast(event: dict):
+    # Voice alert for HIGH-risk events only
+    if event.get("risk_tier") == "HIGH":
+        speak_alert(
+            zone_id  = event.get("zone_id", 0),
+            risk     = event.get("risk_tier", "HIGH"),
+            behavior = event.get("behavior", "anomaly"),
+        )
+
     dead = []
     for ws in connected_ws:
         try:
@@ -188,6 +301,23 @@ def get_stats():
         "uptime_s":        int(time.time()),
     }
 
+@app.post("/demo/tamper")
+async def demo_tamper():
+    event = {"id": "demo_001", "zone_id": 5,
+              "behavior": "loitering", "risk_tier": "HIGH",
+              "timestamp": datetime.utcnow().isoformat()}
+    signed   = sign_event(event.copy())
+    tampered = copy.deepcopy(signed)
+    tampered["risk_tier"] = "LOW"   # attacker downgrades risk
+    original_check = verify_event(signed)
+    tampered_check = verify_event(tampered)
+    return {
+        "original":  original_check,
+        "tampered":  tampered_check,
+        "signature": signed["pqc_signature"]["sha3_hash"][:32] + "...",
+    }
+
+
 async def video_generator():
     global latest_frame
     while True:
@@ -227,4 +357,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 if __name__ == "__main__":
-    uvicorn.run("phase5.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False)

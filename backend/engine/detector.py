@@ -8,6 +8,7 @@ All pretrained from HuggingFace / ultralytics. No dataset needed.
 """
 
 import cv2, time, math
+from collections import deque
 import numpy as np
 from PIL import Image
 from datetime import datetime
@@ -26,6 +27,12 @@ WARMUP_FRAMES   = 150   # collect normal features before fitting IForest
 ANOMALY_THRESH  = 0.42  # CLIP anomaly probability threshold (tune this)
 IFOREST_THRESH  = -0.08 # IForest score threshold (more negative = more anomalous)
 CONFIDENCE_MIN  = 0.40  # minimum YOLO confidence
+
+# Physics-based thresholds (fluid dynamics on optical flow)
+DIV_THRESH      = 0.5   # divergence  > threshold → panic/scatter
+CURL_THRESH     = 0.5   # curl        > threshold → rotational fight
+LYAP_THRESH     = 0.0   # lyapunov    > 0 → chaotic motion
+MAG_HISTORY_LEN = 30    # rolling window length for Lyapunov estimation
 
 # YOLO class IDs we care about — NO face/person identity, just presence
 WATCH_CLASSES = {
@@ -91,6 +98,7 @@ class Detector:
 
         self.frame_count = 0
         self.prev_gray   = None
+        self.mag_history = deque(maxlen=MAG_HISTORY_LEN)  # for Lyapunov
 
         print("  All models loaded.\n")
 
@@ -110,6 +118,42 @@ class Detector:
             mag.mean(), mag.std(), mag.max(),
             ang.mean(), ang.std()
         ], dtype=np.float32)
+
+    # ── Physics features: divergence, curl, Lyapunov ───────────────
+    def physics_features(self, flow, mag_history):
+        """
+        Apply fluid-dynamics equations to the raw optical-flow field.
+
+        Args:
+            flow        : HxWx2 optical-flow array (u=flow[...,0], v=flow[...,1])
+            mag_history : deque of per-frame mean magnitudes (rolling window)
+
+        Returns dict with keys:
+            divergence  — positive = crowd dispersing (panic scatter)
+            curl        — non-zero = rotational motion (fight/brawl)
+            lyapunov    — >0 = chaotic, <0 = stable
+        """
+        fx, fy = flow[..., 0], flow[..., 1]
+
+        # Divergence: ∂u/∂x + ∂v/∂y  (crowd scattering outward)
+        div  = np.gradient(fx, axis=1) + np.gradient(fy, axis=0)
+
+        # Curl: ∂v/∂x − ∂u/∂y  (rotational / fight motion)
+        curl = np.gradient(fy, axis=1) - np.gradient(fx, axis=0)
+
+        # Lyapunov exponent — mean log-growth of flow magnitude over time
+        if len(mag_history) > 5:
+            series = np.array(list(mag_history))
+            diffs  = np.diff(np.log(series + 1e-8))
+            lyap   = float(diffs.mean())
+        else:
+            lyap = 0.0
+
+        return {
+            "divergence": float(div.mean()),   # > 0.5 = panic scatter
+            "curl":       float(curl.mean()),   # > 0.5 = fight rotation
+            "lyapunov":   lyap,                 # > 0 = chaotic, < 0 = stable
+        }
 
     # ── CLIP anomaly score ─────────────────────────────────────────
     def _clip_score(self, frame_bgr):
@@ -171,11 +215,28 @@ class Detector:
         self.frame_count += 1
         fc = self.frame_count
 
-        gray     = cv2.cvtColor(
-            cv2.resize(frame_bgr, (320, 240)),
-            cv2.COLOR_BGR2GRAY
-        ).astype(np.float32)
-        features = self._flow_features(gray)
+        resized  = cv2.resize(frame_bgr, (320, 240))
+        gray     = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY).astype(np.float32)
+
+        # Raw optical flow (needed for both classic features AND physics)
+        raw_flow = None
+        if self.prev_gray is not None:
+            raw_flow = cv2.calcOpticalFlowFarneback(
+                self.prev_gray, gray, None,
+                pyr_scale=0.5, levels=3, winsize=15,
+                iterations=3, poly_n=5, poly_sigma=1.2, flags=0
+            )
+
+        features = self._flow_features(gray)   # updates self.prev_gray internally
+
+        # Track rolling magnitude for Lyapunov
+        self.mag_history.append(float(features[0]))  # features[0] == mag.mean()
+
+        # Compute physics signals if flow is available
+        if raw_flow is not None:
+            phys = self.physics_features(raw_flow, self.mag_history)
+        else:
+            phys = {"divergence": 0.0, "curl": 0.0, "lyapunov": 0.0}
 
         yolo_dets    = []
         clip_score   = 0.0
@@ -209,6 +270,18 @@ class Detector:
                 is_anomaly = True
                 reasons.append(f"Animal detected: {animals[0]['class']}")
 
+        # Physics signals — fluid-dynamics anomalies
+        if abs(phys["divergence"]) > DIV_THRESH:
+            is_anomaly = True
+            reasons.append(f"Panic scatter (div={phys['divergence']:.2f})")
+
+        if abs(phys["curl"]) > CURL_THRESH:
+            is_anomaly = True
+            reasons.append(f"Fight rotation (curl={phys['curl']:.2f})")
+
+        if phys["lyapunov"] > LYAP_THRESH:
+            reasons.append(f"Chaotic motion (λ={phys['lyapunov']:.3f})")
+
         return {
             "frame":          fc,
             "timestamp":      datetime.utcnow().isoformat(),
@@ -220,6 +293,10 @@ class Detector:
             "yolo_detections": yolo_dets,
             "reasons":        reasons,
             "raw_features":   features.tolist(),
+            # Physics / fluid-dynamics signals
+            "divergence":     round(phys["divergence"], 4),
+            "curl":           round(phys["curl"], 4),
+            "lyapunov":       round(phys["lyapunov"], 4),
         }
 
     # ── Draw overlay on frame ──────────────────────────────────────
@@ -246,12 +323,18 @@ class Detector:
             cv2.putText(frame, "Normal",
                         (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        # Stats overlay
+        # Stats overlay — two lines so physics metrics are legible
         cv2.putText(frame,
                     f"CLIP:{result['clip_score']:.2f}  "
                     f"IFor:{result['iforest_score']:.3f}  "
                     f"Mag:{result['flow_magnitude']:.2f}",
-                    (10, h-12), cv2.FONT_HERSHEY_SIMPLEX,
+                    (10, h-26), cv2.FONT_HERSHEY_SIMPLEX,
                     0.45, (220, 220, 220), 1)
+        cv2.putText(frame,
+                    f"Div:{result['divergence']:.2f}  "
+                    f"Curl:{result['curl']:.2f}  "
+                    f"λ:{result['lyapunov']:.3f}",
+                    (10, h-10), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45, (180, 230, 255), 1)
 
         return frame

@@ -13,7 +13,7 @@ Demo flow:
   2. Edit the log   → verify() returns False
   3. "Tamper detected!" banner on dashboard
 
-Usage: from phase6.security import sign_event, verify_event
+Usage: from backend.core.security import sign_event, verify_event
 """
 
 import hashlib, hmac, json, time, os, base64
