@@ -27,3 +27,4 @@ matplotlib==3.10.3
 # Misc
 requests==2.33.0
 websockets==16.0
+pyttsx3

@@ -282,6 +282,7 @@ class Detector:
             reasons.append(f"Fight rotation (curl={phys['curl']:.2f})")
 
         if phys["lyapunov"] > LYAP_THRESH:
+            is_anomaly = True
             reasons.append(f"Chaotic motion (λ={phys['lyapunov']:.3f})")
 
         return {

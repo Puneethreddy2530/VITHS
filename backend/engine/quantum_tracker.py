@@ -167,11 +167,20 @@ class SchrodingerTracker:
         """
         Compact status dict for logging / API responses.
         """
+        if self.tracking:
+            state = "tracking"
+        elif self.psi.max() >= 1e-6:
+            state = "diffusing"
+        else:
+            state = "idle"
+        entropy_val = round(self.entropy(), 4)
         return {
             "tracking":          self.tracking,
+            "state":             state,
             "most_likely_zone":  self.most_likely_zone(),
             "max_probability":   round(float(self.psi.max()), 4),
-            "entropy_bits":      round(self.entropy(), 4),
+            "entropy":           entropy_val,
+            "entropy_bits":      entropy_val,
             "field":             self.field(),
         }
 

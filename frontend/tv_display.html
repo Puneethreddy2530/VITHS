@@ -349,8 +349,8 @@
 
   <script>
     'use strict';
-    const API = 'http://localhost:8031';
-    const WS  = 'ws://localhost:8031/ws/alerts';
+    const API = '';
+    const WS  = `ws://${window.location.host}/ws/alerts`;
     const RC  = { LOW:'#34d399', MEDIUM:'#f59e0b', HIGH:'#ef4444', CRITICAL:'#a78bfa' };
 
     // Build heatmap cells

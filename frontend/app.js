@@ -1,8 +1,8 @@
 'use strict';
 
 /* ── Config ─────────────────────────────────────────────────── */
-const API_BASE = 'http://localhost:8000';
-const WS_URL   = 'ws://localhost:8000/ws/alerts';
+const API_BASE = '';
+const WS_URL   = `ws://${window.location.host}/ws/alerts`;
 
 const RISK_COLOR = {
   LOW:      '#34d399',
@@ -735,8 +735,8 @@ function runTamperDemo() {
     .then(r => r.json())
     .then(d => {
       result.innerHTML =
-        `<span style="color:#34d399">✅ Original: ${d.original ? 'VALID' : 'INVALID'}</span> ` +
-        `<span style="color:#ef4444">❌ Tampered: ${d.tampered ? 'VALID' : 'REJECTED'}</span> ` +
+        `<span style="color:#34d399">✅ Original: ${d.original?.valid ? 'VALID' : 'INVALID'}</span> ` +
+        `<span style="color:#ef4444">❌ Tampered: ${d.tampered?.valid ? 'VALID' : 'REJECTED'}</span> ` +
         `<span style="color:#555">Sig: ${esc(d.signature)}</span>`;
       btn.textContent = '🔐 Run Tamper Demo';
       btn.disabled = false;

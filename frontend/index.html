@@ -7,6 +7,7 @@
   <meta name="description"
     content="PS-003 AI-powered intrusion monitoring system with quantum tracking, physics-based anomaly detection, and trajectory analysis" />
   <title>PS-003 Intrusion Monitor</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -94,7 +95,7 @@
       <span class="on-air">● ON AIR</span>
     </div>
     <div class="video-wrap">
-      <img src="http://localhost:8000/video_feed" alt="Live security stream" />
+      <img src="/video_feed" alt="Live security stream" onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
     </div>
   </div>
 
@@ -240,8 +241,8 @@
   <div style="margin-top:16px;">
     <div class="panel">
       <div class="panel-title">Live Feed — physics overlay</div>
-      <img id="video-feed" src="http://localhost:8000/video_feed" style="width:100%; border-radius:8px; display:block;"
-        onerror="this.style.opacity='0.3'; this.alt='No camera'" />
+      <img id="video-feed" src="/video_feed" style="width:100%; border-radius:8px; display:block;"
+        onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
       <div style="font-size:10px; color:#444; margin-top:6px;">
         Divergence · Curl · Lyapunov · No facial recognition
       </div>

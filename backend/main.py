@@ -9,7 +9,7 @@ Endpoints:
   WS   /ws/alerts         — real-time WebSocket alert stream
 
 Usage: python phase5/main.py
-       then open http://localhost:8000/docs
+       then open http://localhost:8888/docs
 """
 import sys, os, asyncio, json, time, threading, random, copy
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,8 +43,6 @@ _startup_time = time.time()
 # ── Voice dispatch (pyttsx3) ───────────────────────────────────────
 try:
     import pyttsx3 as _pyttsx3
-    _tts = _pyttsx3.init()
-    _tts.setProperty("rate", 160)   # words-per-minute; 160 is clear at 30fps
     _TTS_AVAILABLE = True
 except Exception as _e:
     print(f"[WARN] pyttsx3 unavailable — voice alerts disabled ({_e})")
@@ -129,9 +127,15 @@ async def startup():
 # ── Background camera processing loop ─────────────────────────────
 async def camera_loop():
     global latest_frame
+    cap = None
     if sys.platform.startswith('win'):
-        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    else:
+        for _backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):
+            _cap = cv2.VideoCapture(0, _backend)
+            if _cap.isOpened():
+                cap = _cap
+                break
+            _cap.release()
+    if cap is None:
         cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("[WARN] Webcam not found — using simulated events")
@@ -161,12 +165,21 @@ async def camera_loop():
 
     processing_task = None
     latest_result = None
+    fail_count = 0
+    MAX_FAILS = 500  # ~5 seconds at 0.01s sleep before giving up
 
     while True:
         ret, frame = cap.read()
         if not ret:
+            fail_count += 1
+            if fail_count > MAX_FAILS:
+                print("[WARN] Camera opened but failed to read frames — switching to simulation")
+                cap.release()
+                await simulated_loop()
+                return
             await asyncio.sleep(0.01)
             continue
+        fail_count = 0
 
         # Draw the last known ML results onto the immediate real-time frame
         if latest_result:
@@ -497,12 +510,13 @@ async def demo_reset():
 
 async def video_generator():
     global latest_frame
+    _placeholder = np.zeros((360, 480, 3), dtype=np.uint8)
+    cv2.putText(_placeholder, "Camera initializing...", (70, 175),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (80, 80, 80), 2)
     while True:
-        if latest_frame is None:
-            await asyncio.sleep(0.1)
-            continue
-        # Fast JPEG encoding 
-        ret, buffer = cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        frame = latest_frame if latest_frame is not None else _placeholder
+        # Fast JPEG encoding
+        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         
         if not ret:
             await asyncio.sleep(0.05)
@@ -533,5 +547,27 @@ async def websocket_endpoint(websocket: WebSocket):
             connected_ws.remove(websocket)
 
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+if os.path.isdir(frontend_path):
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
 if __name__ == "__main__":
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False)
+    import socket
+    def get_free_port(default_port=8888):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('0.0.0.0', default_port))
+                return default_port
+            except OSError:
+                s.bind(('0.0.0.0', 0))
+                return s.getsockname()[1]
+                
+    port = get_free_port(8888)
+    print(f"\n======================================")
+    print(f" Starting Dashboard on Port {port}")
+    print(f" Open http://localhost:{port} in your browser")
+    print(f"======================================\n")
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=False)
