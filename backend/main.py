@@ -43,9 +43,10 @@ _startup_time = time.time()
 # ── Voice dispatch (pyttsx3) ───────────────────────────────────────
 try:
     import pyttsx3 as _pyttsx3
+    import pythoncom  # Required for Windows COM initialization in threads
     _TTS_AVAILABLE = True
 except Exception as _e:
-    print(f"[WARN] pyttsx3 unavailable — voice alerts disabled ({_e})")
+    print(f"[WARN] pyttsx3 or pythoncom unavailable — voice alerts disabled ({_e})")
     _TTS_AVAILABLE = False
 
 import queue
@@ -53,14 +54,20 @@ import queue
 tts_queue = queue.Queue()
 
 def _tts_worker():
-    import pyttsx3
-    engine = pyttsx3.init()
-    engine.setProperty("rate", 160)
-    while True:
-        msg = tts_queue.get()
-        if msg is None: break
-        engine.say(msg)
-        engine.runAndWait()
+    if not _TTS_AVAILABLE:
+        return
+    try:
+        pythoncom.CoInitialize()  # Crucial fix for Windows COM threading
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.setProperty("rate", 160)
+        while True:
+            msg = tts_queue.get()
+            if msg is None: break
+            engine.say(msg)
+            engine.runAndWait()
+    except Exception as e:
+        print(f"[TTS Error] Thread crashed: {e}")
 
 if _TTS_AVAILABLE:
     threading.Thread(target=_tts_worker, daemon=True).start()
@@ -127,23 +134,30 @@ async def startup():
 # ── Background camera processing loop ─────────────────────────────
 async def camera_loop():
     global latest_frame
+
+    # Try multiple backends; test actual frame reads (not just isOpened)
     cap = None
-    if sys.platform.startswith('win'):
-        for _backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):
-            _cap = cv2.VideoCapture(0, _backend)
-            if _cap.isOpened():
+    backends = [(cv2.CAP_DSHOW, "DSHOW"), (cv2.CAP_MSMF, "MSMF"), (cv2.CAP_ANY, "ANY")] if sys.platform.startswith('win') else [(cv2.CAP_ANY, "ANY")]
+    for backend_id, backend_name in backends:
+        _cap = cv2.VideoCapture(0, backend_id)
+        if _cap.isOpened():
+            ret, _test = _cap.read()
+            if ret:
                 cap = _cap
+                print(f"[CAM] Using {backend_name} backend — frames OK")
                 break
+            else:
+                print(f"[CAM] {backend_name} opened but can't read frames, trying next...")
+                _cap.release()
+        else:
             _cap.release()
+
     if cap is None:
-        cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("[WARN] Webcam not found — using simulated events")
+        print("[WARN] No working webcam backend — using simulated events")
         await simulated_loop()
         return
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+    # Let the camera use its native resolution to avoid driver rejection
 
     last_sleep_mode = None
     loop = asyncio.get_event_loop()
@@ -169,11 +183,17 @@ async def camera_loop():
     MAX_FAILS = 500  # ~5 seconds at 0.01s sleep before giving up
 
     while True:
-        ret, frame = cap.read()
+        # Crucial fix: cap.read() is synchronous and can block the entire FastAPI event loop 
+        # on Windows if the webcam driver pauses. Force it into a background thread.
+        try:
+            ret, frame = await loop.run_in_executor(None, cap.read)
+        except Exception as e:
+            ret, frame = False, None
+            
         if not ret:
             fail_count += 1
             if fail_count > MAX_FAILS:
-                print("[WARN] Camera opened but failed to read frames — switching to simulation")
+                print("[WARN] Camera stream died — switching to simulation")
                 cap.release()
                 await simulated_loop()
                 return
