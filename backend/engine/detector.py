@@ -23,7 +23,7 @@ DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 YOLO_EVERY      = 3     # run YOLO every N frames
 CLIP_EVERY      = 15    # run CLIP every N frames
 IFOREST_EVERY   = 10    # run IForest every N frames
-WARMUP_FRAMES   = 150   # collect normal features before fitting IForest
+WARMUP_FRAMES   = 50    # collect normal features before fitting IForest
 ANOMALY_THRESH  = 0.42  # CLIP anomaly probability threshold (tune this)
 IFOREST_THRESH  = -0.08 # IForest score threshold (more negative = more anomalous)
 CONFIDENCE_MIN  = 0.25  # minimum YOLO confidence

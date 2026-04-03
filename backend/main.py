@@ -50,29 +50,34 @@ except Exception as _e:
     print(f"[WARN] pyttsx3 unavailable — voice alerts disabled ({_e})")
     _TTS_AVAILABLE = False
 
-# Per-zone cooldown: don't repeat the same zone within 60 s
-_tts_last_spoken: dict[int, float] = {}
-_TTS_COOLDOWN = 60.0   # seconds
+import queue
+
+tts_queue = queue.Queue()
+
+def _tts_worker():
+    import pyttsx3
+    engine = pyttsx3.init()
+    engine.setProperty("rate", 160)
+    while True:
+        msg = tts_queue.get()
+        if msg is None: break
+        engine.say(msg)
+        engine.runAndWait()
+
+if _TTS_AVAILABLE:
+    threading.Thread(target=_tts_worker, daemon=True).start()
+
+_tts_last_spoken = {}
+_TTS_COOLDOWN = 60.0
 
 def speak_alert(zone_id: int, risk: str, behavior: str):
-    """
-    Fire-and-forget TTS alert on a daemon thread so it never blocks
-    the async FastAPI event loop.
-    Only speaks if pyttsx3 is available and zone cooldown has elapsed.
-    """
-    if not _TTS_AVAILABLE:
-        return
     now = time.time()
     if now - _tts_last_spoken.get(zone_id, 0) < _TTS_COOLDOWN:
-        return   # cooldown active for this zone
+        return
     _tts_last_spoken[zone_id] = now
-
-    def _speak():
-        msg = f"Alert. Zone {zone_id}. {behavior.replace('_', ' ')}. Risk level {risk}."
-        _tts.say(msg)
-        _tts.runAndWait()
-
-    threading.Thread(target=_speak, daemon=True).start()
+    msg = f"Alert. Zone {zone_id}. {behavior.replace('_', ' ')}. Risk level {risk}."
+    if _TTS_AVAILABLE:
+        tts_queue.put(msg)
 
 # ── Neuromorphic Event Gate ─────────────────────────────────────────
 class NeuromorphicGate:
@@ -83,12 +88,18 @@ class NeuromorphicGate:
 
     def is_motion_event(self, frame):
         gray = cv2.cvtColor(cv2.resize(frame, (160, 120)), cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0) # Crucial: blur removes static camera noise
         if self.prev_frame_gray is None:
             self.prev_frame_gray = gray
             return True
-        diff = cv2.absdiff(gray, self.prev_frame_gray).mean()
+            
+        diff = cv2.absdiff(gray, self.prev_frame_gray)
+        _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        motion_pixels = cv2.countNonZero(thresh)
         self.prev_frame_gray = gray
-        self.sleep_mode = diff < self.threshold
+        
+        # Wake up if more than 1.5% of the pixels moved
+        self.sleep_mode = motion_pixels < (160 * 120 * 0.015) 
         return not self.sleep_mode
 
 event_gate = NeuromorphicGate()
@@ -118,7 +129,10 @@ async def startup():
 # ── Background camera processing loop ─────────────────────────────
 async def camera_loop():
     global latest_frame
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    if sys.platform.startswith('win'):
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("[WARN] Webcam not found — using simulated events")
         await simulated_loop()
@@ -149,7 +163,7 @@ async def camera_loop():
     latest_result = None
 
     while True:
-        ret, frame = await asyncio.to_thread(cap.read)
+        ret, frame = cap.read()
         if not ret:
             await asyncio.sleep(0.01)
             continue
@@ -487,10 +501,8 @@ async def video_generator():
         if latest_frame is None:
             await asyncio.sleep(0.1)
             continue
-        # Fast JPEG encoding (offloaded to thread to avoid blocking web server)
-        def _encode():
-            return cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        ret, buffer = await asyncio.to_thread(_encode)
+        # Fast JPEG encoding 
+        ret, buffer = cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         
         if not ret:
             await asyncio.sleep(0.05)
