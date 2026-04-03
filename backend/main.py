@@ -319,13 +319,21 @@ async def simulated_loop():
 
 def build_event(enriched: dict, reasoning: dict) -> dict:
     pat = enriched.get("pattern") or {}
+    
+    behavior = enriched.get("behavior", "unknown")
+    risk_tier = enriched.get("risk_tier", "LOW")
+    if behavior == "normal":
+        risk_tier = "LOW"
+        if isinstance(reasoning, dict):
+            reasoning["risk_level"] = "LOW"
+            
     event = {
         "id":              f"evt_{int(time.time()*1000)}",
         "timestamp":       enriched.get("timestamp", datetime.utcnow().isoformat()),
         "zone_id":         enriched.get("zone_id", 0),
-        "behavior":        enriched.get("behavior", "unknown"),
+        "behavior":        behavior,
         "behavior_label":  enriched.get("behavior_label", ""),
-        "risk_tier":       enriched.get("risk_tier", "LOW"),
+        "risk_tier":       risk_tier,
         "clip_score":      enriched.get("clip_score", 0),
         "flow_magnitude":  enriched.get("flow_magnitude", 0),
         "recurrence":      enriched.get("recurrence", 0),

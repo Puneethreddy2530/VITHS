@@ -113,7 +113,8 @@ class EpisodicMemory:
         return int((sims[0] >= SIMILARITY_HIGH).sum())
 
     # ── Risk tier ──────────────────────────────────────────────────
-    def risk_tier(self, recurrence: int) -> str:
+    def risk_tier(self, recurrence: int, behavior: str = "unknown") -> str:
+        if behavior == "normal":            return "LOW"
         if recurrence >= RECURRENCE_HIGH:   return "HIGH"
         if recurrence >= 1:                 return "MEDIUM"
         return "LOW"
@@ -129,7 +130,7 @@ class EpisodicMemory:
         """
         similar   = self.recall(frame_bgr, k=3)
         recurrence = self.recurrence_score(frame_bgr)
-        risk      = self.risk_tier(recurrence)
+        risk      = self.risk_tier(recurrence, event.get("behavior", "unknown"))
         stored    = self.remember(frame_bgr, event)
 
         return {

@@ -399,7 +399,10 @@ class Pipeline:
         # ST-GCN propagation
         if is_anomaly:
             self.threshold.record_alert(zone_id)
-            self.propagator.fire(zone_id, score=min(1.0, result["clip_score"] * 1.5))
+            if behavior == "normal":
+                self.propagator.fire(zone_id, score=min(0.2, result["clip_score"] * 0.5))
+            else:
+                self.propagator.fire(zone_id, score=min(1.0, result["clip_score"] * 1.5))
         self.propagator.decay_all()
 
         result.update({
