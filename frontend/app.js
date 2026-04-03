@@ -138,7 +138,7 @@ function updateHeatmap(heatmap) {
     const score = Math.min(1, h.score || 0);
     _zoneState[z] = { ..._zoneState[z], score, risk };
 
-    poly.style.fill   = scoreToFill(score, risk);
+    poly.style.fill = 'transparent';
     poly.style.stroke = scoreToStroke(score, risk);
     poly.classList.toggle('risk-HIGH', risk === 'HIGH');
 
@@ -147,6 +147,7 @@ function updateHeatmap(heatmap) {
       lbl.style.fill = (RISK_COLOR[risk] || '#666') + '99';
     }
   }
+  renderPixelHeatmap();
 }
 
 /* ── Zone behavior labels ─────────────────────────────────── */
@@ -194,55 +195,92 @@ function getInfernoColor(t, alpha = 0.8) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
-  if (!quantumField) return;
+/* ── Pixelated Probability Heatmap Engine ──────────────── */
+function renderPixelHeatmap() {
+  const canvas = document.getElementById('pixel-heatmap');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
 
-  // Determine if the quantum tracker is actively pushing probabilities
-  const isQuantumActive = quantumState === 'diffusing' || quantumState === 'collapsed' || quantumState === 'tracking';
+  // Clear the canvas for the new frame
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  quantumField.forEach(({ zone_id, probability }) => {
-    const poly = document.getElementById('zpoly-' + zone_id);
-    const ptxt = document.getElementById('zpsi-' + zone_id);
-    if (!poly) return;
+  // Configuration
+  const PIXEL_SIZE = 18; // Size of the blocky "pixels"
+  const SIGMA = 120;     // Gaussian spread radius (how far probability bleeds)
 
-    _zoneState[zone_id] = { ..._zoneState[zone_id], psi: probability };
+  const cols = Math.ceil(canvas.width / PIXEL_SIZE);
+  const rows = Math.ceil(canvas.height / PIXEL_SIZE);
 
-    if (isQuantumActive && probability > 0.01) {
-      if (ptxt) {
-        ptxt.textContent = `ψ ${probability.toFixed(2)}`;
-        ptxt.style.fill = getInfernoColor(Math.min(1.0, probability + 0.3), 1.0); // Make text pop
+  // Pre-fetch the current probabilities to avoid repeated lookups
+  const activeZones = ZONE_DEFS.map(z => {
+    return {
+      cx: z.cx,
+      cy: z.cy,
+      psi: _zoneState[z.id]?.psi || 0,
+      score: _zoneState[z.id]?.score || 0
+    };
+  }).filter(z => z.psi > 0.01 || z.score > 0.1);
+
+  if (activeZones.length === 0) return; // Nothing to draw
+
+  // Loop through every pixel in the grid
+  for (let x = 0; x < cols; x++) {
+    for (let y = 0; y < rows; y++) {
+      const px = x * PIXEL_SIZE + (PIXEL_SIZE / 2);
+      const py = y * PIXEL_SIZE + (PIXEL_SIZE / 2);
+
+      let pixelProbability = 0;
+
+      // Calculate Gaussian influence from all active zones
+      for (const zone of activeZones) {
+        const dx = px - zone.cx;
+        const dy = py - zone.cy;
+        const distSq = dx * dx + dy * dy;
+
+        // Gaussian function: e^(-(d^2) / (2 * sigma^2))
+        const influence = Math.exp(-distSq / (2 * SIGMA * SIGMA));
+
+        // Combine Quantum probability (psi) and ST-GCN score
+        const weight = Math.max(zone.psi * 2.0, zone.score);
+        pixelProbability += influence * weight;
       }
 
-      // 1. Calculate Inferno Colors based on absolute probability
-      // Boost probability visually so it looks intense even at 0.4
-      const visualT = Math.min(1.0, probability * 1.8);
-      const fillAlpha = 0.25 + (visualT * 0.65);
-      const strokeAlpha = 0.6 + (visualT * 0.4);
+      // Only draw if there is a meaningful probability
+      if (pixelProbability > 0.05) {
+        // Cap probability for color mapping
+        const t = Math.min(1.0, pixelProbability);
 
-      poly.style.fill = getInfernoColor(visualT, fillAlpha);
-      poly.style.stroke = getInfernoColor(visualT, strokeAlpha);
+        // Get Inferno color (using the existing getInfernoColor function)
+        ctx.fillStyle = getInfernoColor(t, 0.75 + (t * 0.25));
 
-      // 2. Add burning SVG aura to the highest probability hotspots
-      if (probability > 0.15) {
-        poly.style.filter = 'url(#glow-inferno)';
-        poly.style.strokeWidth = 3;
-      } else {
-        poly.style.filter = 'none';
-        poly.style.strokeWidth = 1;
+        // Draw the blocky pixel
+        ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE - 1, PIXEL_SIZE - 1);
       }
-
-    } else {
-      // 3. Gracefully fallback to the ST-GCN Heatmap if quantum field is empty/idle
-      if (ptxt) ptxt.textContent = '';
-      poly.style.filter = 'none';
-      const st = _zoneState[zone_id];
-      poly.style.fill = scoreToFill(st.score, st.risk);
-      poly.style.stroke = scoreToStroke(st.score, st.risk);
-      poly.style.strokeWidth = 1;
     }
-  });
+  }
+}
 
-  // 4. Update the Quantum Badge UI to match the Inferno aesthetic
+function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
+  if (quantumField) {
+    // Determine if the quantum tracker is actively pushing probabilities
+    const isQuantumActive = quantumState === 'diffusing' || quantumState === 'collapsed' || quantumState === 'tracking';
+
+    quantumField.forEach(({ zone_id, probability }) => {
+      const poly = document.getElementById('zpoly-' + zone_id);
+      const ptxt = document.getElementById('zpsi-' + zone_id);
+      if (!poly) return;
+
+      _zoneState[zone_id] = { ..._zoneState[zone_id], psi: probability };
+
+      if (isQuantumActive && probability > 0.01) {
+        if (ptxt) ptxt.textContent = `ψ ${probability.toFixed(2)}`;
+      } else {
+        if (ptxt) ptxt.textContent = '';
+      }
+    });
+  }
+
+  // Update the Quantum Badge UI to match the Inferno aesthetic
   const badge = document.getElementById('quantum-state-badge');
   if (badge) {
     const colors = { tracking:'#34d399', diffusing:'#f98c0a', collapsed:'#e35933', idle:'#555' };
@@ -254,6 +292,8 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
       badge.style.textShadow = "none";
     }
   }
+
+  renderPixelHeatmap();
 }
 
 /* ── Camera placement ▲ markers on SVG ─────────────────────── */
@@ -744,8 +784,8 @@ function handleSystemReset() {
     const risk = document.getElementById('zlbl-' + i);
     const psi  = document.getElementById('zpsi-' + i);
     if (poly) {
-      poly.style.fill = 'rgba(52,211,153,0.08)'; 
-      poly.style.stroke = 'rgba(52,211,153,0.15)';
+      poly.style.fill = 'transparent';
+      poly.style.stroke = 'rgba(52,211,153,0.35)';
       poly.classList.remove('risk-HIGH', 'quantum-diffusing');
     }
     if (risk) { risk.textContent = 'LOW'; risk.style.fill = 'rgba(255,255,255,0.35)'; }
@@ -781,6 +821,7 @@ function handleSystemReset() {
   });
   const lp = document.getElementById('traj-label-pill');
   if (lp) { lp.textContent = 'Normal path'; lp.style.background = '#0e1e12'; lp.style.color = '#34d399'; }
+  renderPixelHeatmap();
 }
 
 /* ── Demo controls ─────────────────────────────────────────── */
