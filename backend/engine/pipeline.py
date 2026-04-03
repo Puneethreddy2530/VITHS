@@ -116,7 +116,7 @@ class AQHSOThreshold:
     - Spikes (tightens) during stagnation (missed events)
     - Tightens automatically at night (22:00 – 06:00)
     """
-    def __init__(self, base_clip=0.42, base_iforest=-0.08):
+    def __init__(self, base_clip=0.52, base_iforest=-0.08):
         self.base_clip     = base_clip
         self.base_iforest  = base_iforest
         self._stagnation   = defaultdict(int)   # per zone
@@ -363,12 +363,14 @@ class Pipeline:
         thresholds = self.threshold.get_thresholds(zone_id)
         self.threshold.tick(zone_id)
 
-        # Re-evaluate anomaly with adaptive thresholds
+        # Re-evaluate anomaly: adaptive thresholds + physics (must match detector signals)
         is_anomaly = (
-            result["clip_score"]    > thresholds["clip"] or
-            (self.detector.iforest_fitted and
-             result["iforest_score"] < thresholds["iforest"]) or
-            any(d["class"] != "person" for d in result["yolo_detections"])
+            result["clip_score"] > thresholds["clip"] or
+            (self.detector.iforest_fitted and result["iforest_score"] < thresholds["iforest"]) or
+            any(d["class"] != "person" for d in result["yolo_detections"]) or
+            abs(result["divergence"]) > 0.5 or
+            abs(result["curl"]) > 0.5 or
+            result["lyapunov"] > 0.15
         )
 
         # ── Schrödinger Tracker update ───────────────────────────────

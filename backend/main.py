@@ -399,6 +399,82 @@ def get_heatmap():
         return pipeline_instance.propagator.heatmap()
     return [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)]
 
+
+def _heat_risk_to_zone_status(risk: str) -> str:
+    r = (risk or "LOW").upper()
+    if r in ("HIGH", "CRITICAL"):
+        return "ALERT"
+    if r in ("MEDIUM", "MODERATE"):
+        return "SUSPICIOUS"
+    return "SAFE"
+
+
+def _mobile_zones_payload():
+    """102 zones for the Android app (17×6 grid); first 16 mirror backend heatmap."""
+    hm = get_heatmap()
+    by_zid = {int(h.get("zone_id", i)): h for i, h in enumerate(hm)}
+    out = []
+    for android_id in range(1, 103):
+        if android_id <= 16:
+            h = by_zid.get(android_id - 1, {})
+            score = float(h.get("score", 0.0) or 0.0)
+            risk = h.get("risk", "LOW")
+            out.append({
+                "id": android_id,
+                "status": _heat_risk_to_zone_status(str(risk)),
+                "cause": str(h.get("cause", "Monitoring")),
+                "frequency": min(99, int(round(score * 20))),
+                "probability": min(1.0, max(0.0, score)),
+            })
+        else:
+            out.append({
+                "id": android_id,
+                "status": "SAFE",
+                "cause": "Monitoring",
+                "frequency": 0,
+                "probability": 0.0,
+            })
+    return out
+
+
+def _event_to_mobile_alert(e: dict) -> dict:
+    risk = str(e.get("risk_tier", "LOW")).upper()
+    if risk in ("HIGH", "CRITICAL"):
+        status = "ALERT"
+    elif risk in ("MEDIUM", "MODERATE"):
+        status = "SUSPICIOUS"
+    else:
+        status = "SAFE"
+    z_backend = int(e.get("zone_id", 0))
+    zone_number = min(102, max(1, z_backend + 1))
+    label = e.get("behavior_label") or e.get("behavior") or "Anomaly"
+    cause = str(e.get("behavior") or "Unknown")
+    ts = e.get("timestamp")
+    if isinstance(ts, str):
+        ts_str = ts
+    else:
+        ts_str = datetime.utcnow().isoformat()
+    return {
+        "message": f"{label} — zone {zone_number}",
+        "zoneNumber": zone_number,
+        "timestamp": ts_str,
+        "status": status,
+        "cause": cause,
+    }
+
+
+@app.get("/alerts")
+def get_alerts_mobile(limit: int = 30):
+    """Android app (Retrofit); same incidents as /events, Gson-friendly shape."""
+    return [_event_to_mobile_alert(e) for e in list(incident_log)[:limit]]
+
+
+@app.get("/zones")
+def get_zones_mobile():
+    """Android app: full 102-zone grid aligned with IncidentRepository."""
+    return _mobile_zones_payload()
+
+
 @app.get("/events")
 def get_events(limit: int = 50):
     return list(incident_log)[:limit]
