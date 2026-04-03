@@ -24,14 +24,14 @@ YOLO_EVERY      = 3     # run YOLO every N frames
 CLIP_EVERY      = 15    # run CLIP every N frames
 IFOREST_EVERY   = 10    # run IForest every N frames
 WARMUP_FRAMES   = 50    # collect normal features before fitting IForest
-ANOMALY_THRESH  = 0.42  # CLIP anomaly probability threshold (tune this)
+ANOMALY_THRESH  = 0.55  # CLIP anomaly probability threshold (tune this)
 IFOREST_THRESH  = -0.08 # IForest score threshold (more negative = more anomalous)
 CONFIDENCE_MIN  = 0.25  # minimum YOLO confidence
 
 # Physics-based thresholds (fluid dynamics on optical flow)
 DIV_THRESH      = 0.5   # divergence  > threshold → panic/scatter
 CURL_THRESH     = 0.5   # curl        > threshold → rotational fight
-LYAP_THRESH     = 0.0   # lyapunov    > 0 → chaotic motion
+LYAP_THRESH     = 0.35  # lyapunov    > 0 → chaotic motion
 MAG_HISTORY_LEN = 30    # rolling window length for Lyapunov estimation
 
 # YOLO class IDs we care about — NO face/person identity, just presence

@@ -608,11 +608,11 @@ body {
 }
 #system-label { color: #555; font-size: 10px; }
 
-/* ── Overlay Alert Mode Blur ───────────────────────────────────── */
+/* ── Overlay Alert Mode Blur (DISABLED SO APP REMAINS USABLE) ── */
 body { transition: background 0.5s; }
-body.alert-mode { background: #050000; }
+/* body.alert-mode { background: #050000; } removed to prevent blackout */
 body.alert-mode > *:not(.main-grid) {
-  filter: blur(2px) brightness(0.6);
+  /* filter: blur(2px) brightness(0.6); removed to prevent blurring */
   transition: filter 0.5s ease;
 }
 
@@ -629,34 +629,41 @@ body.alert-mode > *:not(.main-grid) {
   100% { r: 150px; opacity: 0; stroke-width: 0; }
 }
 
-/* ── DOMINANT ALERT POPUP (HIGH/CRITICAL) ─────────────── */
+/* ── DOMINANT ALERT POPUP -> CHANGED TO SIDE TOAST ─────────────── */
 .alert-critical {
   position: fixed !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) scale(1.05) !important;
-  width: 70vw !important;
-  max-width: 900px !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  transform: none !important;
+  width: 420px !important; /* Smaller width for side popup */
   z-index: 10000;
-  box-shadow: 0 0 40px rgba(239,68,68,0.5) !important;
+  box-shadow: 0 8px 32px rgba(239,68,68,0.3) !important;
   border: 1px solid rgba(239,68,68,0.8) !important;
   background: rgba(10,10,15,0.95) !important;
   backdrop-filter: blur(16px);
-  animation: popInAlert 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-radius: 12px;
+  animation: slideInAlert 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-@keyframes popInAlert {
-  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
-  100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+
+/* Stack the columns vertically so it fits nicely in the smaller width */
+.alert-critical .alert-split {
+  grid-template-columns: 1fr !important;
+  gap: 10px;
+}
+
+@keyframes slideInAlert {
+  0% { transform: translateX(120%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
 }
 
 .typewriter-text {
   font-family: 'Inter', monospace;
   color: #fca5a5;
   white-space: pre-wrap;
-  font-size: 14px;
-  line-height: 1.6;
-  margin-bottom: 20px;
-  min-height: 85px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  min-height: 65px;
   border-left: 3px solid #ef4444;
   padding-left: 14px;
   font-weight: 600;

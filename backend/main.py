@@ -309,65 +309,12 @@ async def camera_loop():
 
 async def simulated_loop():
     """Simulates anomaly events for demo when no webcam."""
-    behaviors = ["loitering", "fast_movement", "animal", "erratic"]
+    print("[INFO] Running in simulation mode. Use the frontend 'Demo Controls' to trigger events manually.")
+    
+    # Send system to sleep and keep it quiet instead of firing random events
     while True:
         await broadcast_system_state(True)
-        await asyncio.sleep(random.uniform(4, 10))
-        await broadcast_system_state(False)
-        zone_id  = random.randint(0, 15)
-        behavior = random.choice(behaviors)
-        event = {
-            "id":              f"evt_{int(time.time()*1000)}",
-            "timestamp":       datetime.utcnow().isoformat(),
-            "zone_id":         zone_id,
-            "behavior":        behavior,
-            "behavior_label":  behavior.replace("_", " ").title(),
-            "risk_tier":       random.choice(["LOW", "MEDIUM", "HIGH"]),
-            "clip_score":      round(random.uniform(0.4, 0.9), 3),
-            "recurrence":      random.randint(0, 5),
-            "pattern_id":      f"P{random.randint(1,20):03d}",
-            "reasoning": {
-                "risk_level":         "MEDIUM",
-                "pattern_summary":    f"Simulated {behavior} in zone {zone_id}",
-                "why_flagged":        ["Demo mode", "Simulated event"],
-                "predicted_next":     "N/A (simulation)",
-                "recommended_action": "No real action needed (demo)",
-            },
-            "heatmap": [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)],
-            "quantum_field": [
-                {"zone_id": i, "probability": random.uniform(0, 0.15)
-                 if i != zone_id else random.uniform(0.6, 1.0)}
-                for i in range(16)
-            ],
-            "quantum_state":   random.choice(["tracking", "diffusing", "collapsed"]),
-            "quantum_entropy": round(random.uniform(0.1, 2.5), 3),
-            "divergence":      round(random.uniform(-1.0, 1.0), 4),
-            "curl":            round(random.uniform(-1.0, 1.0), 4),
-            "lyapunov":        round(random.uniform(-0.5, 0.8), 4),
-            "simulated": True,
-        }
-        event["heatmap"][zone_id]["score"] = round(random.uniform(0.5, 1.0), 3)
-        event["heatmap"][zone_id]["risk"]  = event["risk_tier"]
-
-        is_traj_suspicious = random.random() < 0.3
-        osc = random.randint(0, 6) if is_traj_suspicious else random.randint(0, 2)
-        eff = round(random.uniform(0.15, 0.34), 3) if is_traj_suspicious else round(random.uniform(0.4, 0.9), 3)
-        ent = round(random.uniform(2.1, 3.0), 3) if is_traj_suspicious else round(random.uniform(0.3, 1.8), 3)
-        if is_traj_suspicious:
-            traj_label = random.choice(["Mule behavior", "Zigzag pattern", "Chokepoint loiter"])
-        else:
-            traj_label = "Normal"
-        event["trajectory"] = {
-            "path_entropy":            ent,
-            "displacement_efficiency": eff,
-            "oscillation_count":       osc,
-            "is_suspicious":           is_traj_suspicious,
-            "label":                   traj_label,
-        }
-        event["flow_magnitude"] = round(random.uniform(0.2, 5.0), 3)
-
-        incident_log.appendleft(event)
-        await broadcast(event)
+        await asyncio.sleep(3600)  # Sleep for an hour instead of 4-10 seconds
 
 
 def build_event(enriched: dict, reasoning: dict) -> dict:
