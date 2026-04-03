@@ -23,6 +23,7 @@ from collections import deque
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import uvicorn
 
 # ── Lazy imports (models load once on startup) ─────────────────────
@@ -36,6 +37,8 @@ from backend.core.security import sign_event, verify_event
 app = FastAPI(title="PS-003 AI Intrusion Monitor", version="1.0.0")
 app.add_middleware(CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+_startup_time = time.time()
 
 # ── Voice dispatch (pyttsx3) ───────────────────────────────────────
 try:
@@ -201,6 +204,25 @@ async def simulated_loop():
         }
         event["heatmap"][zone_id]["score"] = round(random.uniform(0.5, 1.0), 3)
         event["heatmap"][zone_id]["risk"]  = event["risk_tier"]
+
+        # Trajectory data for demo
+        is_traj_suspicious = random.random() < 0.3
+        osc = random.randint(0, 6) if is_traj_suspicious else random.randint(0, 2)
+        eff = round(random.uniform(0.15, 0.34), 3) if is_traj_suspicious else round(random.uniform(0.4, 0.9), 3)
+        ent = round(random.uniform(2.1, 3.0), 3) if is_traj_suspicious else round(random.uniform(0.3, 1.8), 3)
+        if is_traj_suspicious:
+            traj_label = random.choice(["Mule behavior", "Zigzag pattern", "Chokepoint loiter"])
+        else:
+            traj_label = "Normal"
+        event["trajectory"] = {
+            "path_entropy":            ent,
+            "displacement_efficiency": eff,
+            "oscillation_count":       osc,
+            "is_suspicious":           is_traj_suspicious,
+            "label":                   traj_label,
+        }
+        event["flow_magnitude"] = round(random.uniform(0.2, 5.0), 3)
+
         incident_log.appendleft(event)
         await broadcast(event)
 
@@ -215,6 +237,7 @@ def build_event(enriched: dict, reasoning: dict) -> dict:
         "behavior_label":  enriched.get("behavior_label", ""),
         "risk_tier":       enriched.get("risk_tier", "LOW"),
         "clip_score":      enriched.get("clip_score", 0),
+        "flow_magnitude":  enriched.get("flow_magnitude", 0),
         "recurrence":      enriched.get("recurrence", 0),
         "pattern_id":      pat.get("pattern_id"),
         "pattern_label":   pat.get("label"),
@@ -224,6 +247,8 @@ def build_event(enriched: dict, reasoning: dict) -> dict:
         "divergence":      enriched.get("divergence", 0.0),
         "curl":            enriched.get("curl", 0.0),
         "lyapunov":        enriched.get("lyapunov", 0.0),
+        # Trajectory / mule topology
+        "trajectory":      enriched.get("trajectory", {}),
         # Schrödinger quantum tracker state
         "quantum":         enriched.get("quantum", {}),
         "quantum_field": [
@@ -295,10 +320,26 @@ def get_placements():
 
 @app.get("/stats")
 def get_stats():
+    active = 0
+    avg_clip = 0.0
+    if pipeline_instance:
+        for z in range(16):
+            if pipeline_instance.propagator.scores.get(z, 0) > 0.01:
+                active += 1
+    recent = list(incident_log)[:50]
+    if recent:
+        clips = [e.get("clip_score", 0) for e in recent]
+        avg_clip = sum(clips) / len(clips) if clips else 0.0
+    patterns_found = 0
+    if pipeline_instance:
+        patterns_found = len(pipeline_instance.patterns.all_patterns())
     return {
         "total_incidents": len(incident_log),
         "memory_events":   memory_instance._index.ntotal if memory_instance else 0,
-        "uptime_s":        int(time.time()),
+        "active_zones":    active,
+        "avg_clip_score":  round(avg_clip, 3),
+        "patterns_found":  patterns_found,
+        "uptime_s":        int(time.time() - _startup_time),
     }
 
 @app.post("/demo/tamper")
@@ -316,6 +357,99 @@ async def demo_tamper():
         "tampered":  tampered_check,
         "signature": signed["pqc_signature"]["sha3_hash"][:32] + "...",
     }
+
+
+class SimulateRequest(BaseModel):
+    risk: str = "HIGH"
+    behavior: str = "fast_movement"
+
+@app.post("/demo/simulate")
+async def demo_simulate(req: SimulateRequest):
+    """Inject a simulated anomaly event into the broadcast."""
+    zone_id = random.randint(0, 15)
+    behaviors_map = {
+        "fast_movement": "Fast movement across zone",
+        "loitering":     "Loitering near entrance",
+        "erratic":       "Erratic / suspicious motion",
+        "animal":        "Animal intrusion",
+    }
+    is_traj_suspicious = random.random() < 0.5
+    osc = random.randint(4, 6) if is_traj_suspicious else random.randint(0, 2)
+    eff = round(random.uniform(0.15, 0.30), 3) if is_traj_suspicious else round(random.uniform(0.5, 0.9), 3)
+    ent = round(random.uniform(2.2, 3.0), 3) if is_traj_suspicious else round(random.uniform(0.3, 1.5), 3)
+    if is_traj_suspicious:
+        traj_label = random.choice(["Mule behavior", "Zigzag pattern", "Chokepoint loiter"])
+    else:
+        traj_label = "Normal"
+
+    event = {
+        "id":              f"evt_{int(time.time()*1000)}",
+        "timestamp":       datetime.utcnow().isoformat(),
+        "zone_id":         zone_id,
+        "behavior":        req.behavior,
+        "behavior_label":  behaviors_map.get(req.behavior, req.behavior.replace("_", " ").title()),
+        "risk_tier":       req.risk.upper(),
+        "clip_score":      round(random.uniform(0.5, 0.95), 3),
+        "flow_magnitude":  round(random.uniform(2.5, 6.0), 3),
+        "recurrence":      random.randint(1, 8),
+        "pattern_id":      f"P{random.randint(1,20):03d}",
+        "reasoning": {
+            "risk_level":         req.risk.upper(),
+            "pattern_summary":    f"Simulated {req.behavior.replace('_',' ')} detected in zone {zone_id}",
+            "why_flagged":        [f"{req.behavior.replace('_',' ').title()} detected", f"Risk level: {req.risk.upper()}", "Demo simulation"],
+            "predicted_next":     "Potential escalation if behavior persists",
+            "recommended_action": "Dispatch security patrol to zone",
+        },
+        "heatmap": [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)],
+        "quantum_field": [
+            {"zone_id": i, "probability": random.uniform(0, 0.1)
+             if i != zone_id else random.uniform(0.7, 1.0)}
+            for i in range(16)
+        ],
+        "quantum_state":   random.choice(["tracking", "diffusing", "collapsed"]),
+        "quantum_entropy": round(random.uniform(0.5, 2.5), 3),
+        "divergence":      round(random.uniform(-0.8, 0.8), 4),
+        "curl":            round(random.uniform(-0.8, 0.8), 4),
+        "lyapunov":        round(random.uniform(-0.3, 0.6), 4),
+        "trajectory": {
+            "path_entropy":            ent,
+            "displacement_efficiency": eff,
+            "oscillation_count":       osc,
+            "is_suspicious":           is_traj_suspicious,
+            "label":                   traj_label,
+        },
+        "simulated": True,
+    }
+    score = round(random.uniform(0.6, 1.0), 3)
+    event["heatmap"][zone_id]["score"] = score
+    event["heatmap"][zone_id]["risk"]  = req.risk.upper()
+    # Propagate to adjacent zones
+    for nbr in [zone_id-1, zone_id+1, zone_id-4, zone_id+4]:
+        if 0 <= nbr < 16:
+            event["heatmap"][nbr]["score"] = round(score * 0.4, 3)
+            event["heatmap"][nbr]["risk"]  = "MEDIUM" if req.risk.upper() == "HIGH" else "LOW"
+
+    incident_log.appendleft(event)
+    await broadcast(event)
+    return {"status": "ok", "event_id": event["id"], "zone_id": zone_id}
+
+
+@app.post("/demo/reset")
+async def demo_reset():
+    """Clear all zone scores and incident log."""
+    incident_log.clear()
+    if pipeline_instance:
+        pipeline_instance.propagator.scores.clear()
+    msg = {"type": "system_reset"}
+    dead = []
+    for ws in connected_ws:
+        try:
+            await ws.send_text(json.dumps(msg))
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        connected_ws.remove(ws)
+    return {"status": "ok", "message": "All zones and incidents cleared"}
 
 
 async def video_generator():

@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="PS-003 AI-powered intrusion monitoring system with quantum tracking, physics-based anomaly detection, and trajectory analysis" />
   <title>PS-003 Intrusion Monitor</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,16 +13,13 @@
   <div class="header">
     <div>
       <h1>PS-003 Intrusion Monitor</h1>
-      <p class="header-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC</p>
+      <p class="header-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC · Trajectory Topology</p>
     </div>
     <div class="header-right">
       <div class="privacy-badge">🔐 Privacy 100% · No faces · PQC Signed</div>
-      <div id="system-state" style="display:flex; align-items:center; gap:6px;
-           font-size:11px; padding:4px 12px; border-radius:20px;
-           background:#1a1a22; border:1px solid #222;">
-        <span id="system-dot" style="width:7px; height:7px; border-radius:50%;
-              background:#444; transition:background 0.5s; flex-shrink:0;"></span>
-        <span id="system-label" style="color:#555;">Neuromorphic — idle</span>
+      <div id="system-state">
+        <span id="system-dot"></span>
+        <span id="system-label">Neuromorphic — idle</span>
       </div>
       <div class="status-pill">
         <span id="status-dot"></span>
@@ -30,23 +28,59 @@
     </div>
   </div>
 
-  <!-- ── STATS ROW ─────────────────────────────────────────────── -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-value" id="stat-total" style="color:#7F77DD">0</div>
-      <div class="stat-label">Total Alerts</div>
+  <!-- ── FEATURE SHOWCASE STRIP ───────────────────────────────── -->
+  <div class="feature-strip" id="feature-strip">
+    <div class="feature-pill" id="pill-flow">
+      <span class="pill-icon">⚛</span>
+      <span>Optical Flow</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-value" id="stat-memory" style="color:#1D9E75">0</div>
+    <div class="feature-pill" id="pill-divcurl">
+      <span class="pill-icon">〜</span>
+      <span>Div/Curl</span>
+    </div>
+    <div class="feature-pill" id="pill-lyapunov">
+      <span class="pill-icon">λ</span>
+      <span>Lyapunov</span>
+    </div>
+    <div class="feature-pill" id="pill-quantum">
+      <span class="pill-icon">ψ</span>
+      <span>Quantum</span>
+    </div>
+    <div class="feature-pill" id="pill-clip">
+      <span class="pill-icon">🧠</span>
+      <span>CLIP Semantic</span>
+    </div>
+    <div class="feature-pill" id="pill-trajectory">
+      <span class="pill-icon">🗺</span>
+      <span>Trajectory</span>
+    </div>
+  </div>
+
+  <!-- ── LIVE STATS BAR ───────────────────────────────────────── -->
+  <div class="stats-grid">
+    <div class="stat-card" style="--accent:#a78bfa">
+      <div class="stat-value" id="stat-total" style="color:#a78bfa">0</div>
+      <div class="stat-label">Incidents Today</div>
+    </div>
+    <div class="stat-card" style="--accent:#34d399">
+      <div class="stat-value" id="stat-memory" style="color:#34d399">0</div>
       <div class="stat-label">Memory Events</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value" style="color:#EF9F27">16</div>
-      <div class="stat-label">Zones Monitored</div>
+    <div class="stat-card" style="--accent:#60a5fa">
+      <div class="stat-value" id="stat-zones" style="color:#60a5fa">0</div>
+      <div class="stat-label">Active Zones</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value" style="color:#D85A30">8</div>
-      <div class="stat-label">Papers Cited</div>
+    <div class="stat-card" style="--accent:#f59e0b">
+      <div class="stat-value" id="stat-clip" style="color:#f59e0b">0.00</div>
+      <div class="stat-label">Avg CLIP Score</div>
+    </div>
+    <div class="stat-card" style="--accent:#ec4899">
+      <div class="stat-value" id="stat-patterns" style="color:#ec4899">0</div>
+      <div class="stat-label">Patterns Found</div>
+    </div>
+    <div class="stat-card" style="--accent:#6ee7b7">
+      <div class="stat-value" id="stat-uptime" style="color:#6ee7b7">0s</div>
+      <div class="stat-label">Uptime</div>
     </div>
   </div>
 
@@ -57,7 +91,7 @@
       <span class="on-air">● ON AIR</span>
     </div>
     <div class="video-wrap">
-      <img src="http://localhost:8000/video_feed" alt="Live security stream" />
+      <img src="http://localhost:8031/video_feed" alt="Live security stream" />
     </div>
   </div>
 
@@ -68,15 +102,15 @@
     <div class="card">
       <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
         <span>Hostel Block Heatmap (ST-GCN propagation)</span>
-        <span id="quantum-state-badge" style="font-size:11px; color:#888;">ψ idle</span>
+        <span id="quantum-state-badge" style="font-size:10px; color:#666;">ψ idle</span>
       </div>
       <div class="heatmap-grid" id="heatmap-grid">
         <!-- 16 zone cells injected by app.js -->
       </div>
       <div class="heatmap-legend">
-        <span><span class="legend-swatch" style="background:#1D9E75"></span>LOW</span>
-        <span><span class="legend-swatch" style="background:#EF9F27"></span>MEDIUM</span>
-        <span><span class="legend-swatch" style="background:#E24B4A"></span>HIGH</span>
+        <span><span class="legend-swatch" style="background:#34d399"></span>LOW</span>
+        <span><span class="legend-swatch" style="background:#f59e0b"></span>MEDIUM</span>
+        <span><span class="legend-swatch" style="background:#ef4444"></span>HIGH</span>
       </div>
     </div>
 
@@ -98,52 +132,95 @@
     </div>
   </div>
 
-  <!-- ── PHYSICS + VIDEO ROW ───────────────────────────────────── -->
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">
+  <!-- ── PHYSICS + TRAJECTORY ────────────────────────────────── -->
+  <div class="physics-traj-grid">
 
     <!-- Physics Readout Panel -->
     <div class="panel" id="physics-panel">
       <div class="panel-title">Physics Engine — real-time</div>
       <div class="physics-row">
         <span class="phys-label">Divergence</span>
-        <span id="phys-div">—</span>
+        <span class="phys-value" id="phys-div">—</span>
         <span class="phys-tag" id="phys-div-tag"></span>
       </div>
       <div class="physics-row">
         <span class="phys-label">Curl</span>
-        <span id="phys-curl">—</span>
+        <span class="phys-value" id="phys-curl">—</span>
         <span class="phys-tag" id="phys-curl-tag"></span>
       </div>
       <div class="physics-row">
         <span class="phys-label">Lyapunov λ</span>
-        <span id="phys-lyap">—</span>
+        <span class="phys-value" id="phys-lyap">—</span>
         <span class="phys-tag" id="phys-lyap-tag"></span>
+      </div>
+      <div class="physics-row">
+        <span class="phys-label">Optical Flow</span>
+        <span class="phys-value" id="phys-flow">—</span>
+        <span class="phys-tag" id="phys-flow-tag"></span>
       </div>
     </div>
 
-    <!-- Live Feed — physics overlay -->
-    <div class="panel">
-      <div class="panel-title">Live Feed — physics overlay</div>
-      <img id="video-feed"
-           src="http://localhost:8000/video_feed"
-           style="width:100%; border-radius:8px; display:block;"
-           onerror="this.style.opacity='0.3'; this.alt='No camera'"/>
-      <div style="font-size:11px; color:#555; margin-top:6px;">
-        Divergence · Curl · Lyapunov · No facial recognition
+    <!-- Trajectory topology panel -->
+    <div class="panel" id="trajectory-panel">
+      <div class="panel-title">Trajectory Topology — Mule Detection</div>
+      <div class="traj-row">
+        <span class="traj-label">Path Entropy</span>
+        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-entropy-bar" style="width:0; background:#34d399"></div></div>
+        <span class="traj-value" id="traj-entropy-val">—</span>
+        <span class="traj-status" id="traj-entropy-status" style="background:#0e1e12; color:#34d399;">—</span>
+      </div>
+      <div class="traj-row">
+        <span class="traj-label">Efficiency</span>
+        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-eff-bar" style="width:0; background:#34d399"></div></div>
+        <span class="traj-value" id="traj-eff-val">—</span>
+        <span class="traj-status" id="traj-eff-status" style="background:#0e1e12; color:#34d399;">—</span>
+      </div>
+      <div class="traj-row">
+        <span class="traj-label">Oscillations</span>
+        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-osc-bar" style="width:0; background:#34d399"></div></div>
+        <span class="traj-value" id="traj-osc-val">—</span>
+        <span class="traj-status" id="traj-osc-status" style="background:#0e1e12; color:#34d399;">—</span>
+      </div>
+      <div style="padding-top:8px;">
+        <span class="traj-label" style="display:block; margin-bottom:4px;">Label</span>
+        <span class="traj-label-pill" id="traj-label-pill" style="background:#0e1e12; color:#34d399;">Normal path</span>
       </div>
     </div>
 
   </div>
 
-  <!-- ── TAMPER DEMO ─────────────────────────────────────────────── -->
-  <div class="panel" style="margin-top:16px;">
-    <div class="panel-title">PQC Tamper Detection — Judge Demo</div>
-    <button id="tamper-btn" onclick="runTamperDemo()"
-      style="padding:8px 16px; background:#12121a; border:1px solid #333;
-             color:#ccc; border-radius:8px; cursor:pointer; font-size:12px;">
-      Run tamper demo
-    </button>
-    <div id="tamper-result" style="font-size:12px; margin-top:8px; line-height:1.8;"></div>
+  <!-- ── LIVE FEED — physics overlay ──────────────────────────── -->
+  <div style="margin-top:16px;">
+    <div class="panel">
+      <div class="panel-title">Live Feed — physics overlay</div>
+      <img id="video-feed"
+           src="http://localhost:8031/video_feed"
+           style="width:100%; border-radius:8px; display:block;"
+           onerror="this.style.opacity='0.3'; this.alt='No camera'"/>
+      <div style="font-size:10px; color:#444; margin-top:6px;">
+        Divergence · Curl · Lyapunov · No facial recognition
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DEMO CONTROLS ────────────────────────────────────────── -->
+  <div class="panel demo-panel">
+    <div class="demo-header" onclick="toggleDemoPanel()">
+      <div class="panel-title">Demo Controls — Judge Demo</div>
+      <span class="demo-toggle" id="demo-toggle">▼</span>
+    </div>
+    <div class="demo-body" id="demo-body">
+      <button class="demo-btn btn-danger" id="simulate-btn" onclick="simulateHighRisk()">
+        ⚡ Simulate HIGH Risk Event
+      </button>
+      <button class="demo-btn btn-warning" id="tamper-btn" onclick="runTamperDemo()">
+        🔐 Run Tamper Demo
+      </button>
+      <button class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
+        🔄 Reset All Zones
+      </button>
+      <div class="demo-result" id="tamper-result"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>

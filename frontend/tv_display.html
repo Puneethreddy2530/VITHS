@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PS-003 — Monitoring Display</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #08080d;
+      color: #e0e0e0;
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Offline overlay ─────────────────────────────── */
+    #offline-overlay {
+      position: fixed; inset: 0;
+      background: rgba(8,8,13,0.92);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #offline-overlay.show { display: flex; }
+    .offline-text {
+      font-size: 64px;
+      font-weight: 800;
+      color: #ef4444;
+      letter-spacing: 6px;
+      animation: pulse-offline 2s ease-in-out infinite;
+    }
+    .offline-sub { font-size: 18px; color: #555; }
+    @keyframes pulse-offline {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── Top bar ──────────────────────────────────────── */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: #0e0e15;
+      border-bottom: 1px solid #1a1a25;
+      flex-shrink: 0;
+    }
+    .top-bar .title {
+      font-size: 20px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 50%, #34d399 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .top-bar .title-sub { font-size: 10px; color: #444; }
+    .top-bar .pills {
+      display: flex; gap: 6px;
+    }
+    .top-bar .pill {
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 500;
+      background: #16161e;
+      border: 1px solid #222230;
+      color: #555;
+      transition: all 0.8s ease;
+      white-space: nowrap;
+    }
+    .pill.pulse-flow       { background: #2d1f4e; border-color: #7c3aed55; color: #c4b5fd; }
+    .pill.pulse-divcurl    { background: #3d1f1f; border-color: #f4726055; color: #fca5a5; }
+    .pill.pulse-lyapunov   { background: #3d1010; border-color: #ef444455; color: #fca5a5; }
+    .pill.pulse-quantum    { background: #2d1f4e; border-color: #8b5cf655; color: #c4b5fd; }
+    .pill.pulse-clip       { background: #3d2f10; border-color: #f59e0b55; color: #fcd34d; }
+    .pill.pulse-trajectory { background: #3d1030; border-color: #ec489955; color: #f9a8d4; }
+    .top-bar .clock {
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 1px;
+    }
+    .top-bar .clock-date {
+      font-size: 11px;
+      color: #555;
+      text-align: right;
+    }
+
+    /* ── Main body ────────────────────────────────────── */
+    .main-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px 24px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Left: Heatmap ────────────────────────────────── */
+    .heatmap-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .heatmap-panel .panel-title {
+      font-size: 16px; font-weight: 600; color: #888;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .tv-heatmap {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      flex: 1;
+    }
+    .tv-zone {
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #1a1a25;
+      transition: all 0.4s ease;
+      background: rgba(52,211,153,0.06);
+      min-height: 80px;
+    }
+    .tv-zone .q-overlay {
+      position: absolute; inset: 0;
+      background: rgba(167,139,250,0);
+      transition: background 0.6s ease;
+      pointer-events: none; border-radius: inherit;
+    }
+    .tv-zone .zone-id { font-size: 18px; font-weight: 700; color: #666; position: relative; z-index: 1; }
+    .tv-zone .zone-risk-label { font-size: 14px; font-weight: 600; position: relative; z-index: 1; transition: color 0.3s; }
+    .tv-zone .zone-beh { font-size: 11px; color: #f59e0b; position: relative; z-index: 1; margin-top: 2px; }
+    .tv-zone .zone-psi { position: absolute; bottom: 4px; right: 6px; font-size: 10px; color: rgba(167,139,250,0.8); font-weight: 600; }
+    .tv-zone .zone-cam { position: absolute; top: 4px; right: 6px; font-size: 11px; color: #7c3aed; display: none; }
+    @keyframes tv-pulse { 0%,100%{opacity:1}50%{opacity:.6} }
+    .tv-zone.q-active .q-overlay { animation: tv-pulse 1.4s ease-in-out infinite; }
+
+    /* ── Right column ─────────────────────────────────── */
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    /* ── Alert card (big) ─────────────────────────────── */
+    .tv-alert {
+      background: #11111a;
+      border-radius: 14px;
+      padding: 20px;
+      border: 1px solid #1e1e2a;
+      flex: 1.2;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+    .tv-alert .sec-title {
+      font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: 1px;
+    }
+    .tv-alert .risk-badge {
+      font-size: 36px; font-weight: 800; text-align: center;
+      padding: 10px 24px; border-radius: 12px; color: #fff;
+      letter-spacing: 3px;
+    }
+    .tv-alert .alert-info {
+      font-size: 18px; color: #ccc; line-height: 1.5;
+    }
+    .tv-alert .alert-meta {
+      font-size: 13px; color: #666;
+    }
+
+    /* ── Physics readings (big) ───────────────────────── */
+    .tv-physics {
+      background: #11111a;
+      border-radius: 14px;
+      padding: 16px 20px;
+      border: 1px solid #1e1e2a;
+      flex: 0.6;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .tv-phys-item {
+      text-align: center;
+    }
+    .tv-phys-item .phys-name { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+    .tv-phys-item .phys-val {
+      font-size: 32px; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      margin-top: 4px;
+    }
+    .tv-phys-item .phys-st { font-size: 10px; margin-top: 2px; }
+
+    /* ── Trajectory status ────────────────────────────── */
+    .tv-trajectory {
+      background: #11111a;
+      border-radius: 14px;
+      padding: 16px 20px;
+      border: 1px solid #1e1e2a;
+      flex: 0.4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+    .tv-trajectory .traj-icon { font-size: 32px; }
+    .tv-trajectory .traj-text {
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .tv-trajectory .traj-detail {
+      font-size: 12px; color: #666; margin-top: 4px;
+    }
+
+    /* ── Bottom ticker ────────────────────────────────── */
+    .bottom-ticker {
+      background: #0a0a10;
+      border-top: 1px solid #1a1a25;
+      padding: 8px 0;
+      overflow: hidden;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ticker-track {
+      display: inline-block;
+      animation: ticker-scroll 60s linear infinite;
+      white-space: nowrap;
+    }
+    @keyframes ticker-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .ticker-item {
+      display: inline-block;
+      padding: 0 24px;
+      font-size: 13px;
+      color: #888;
+      border-right: 1px solid #1a1a25;
+    }
+    .ticker-item .t-risk {
+      font-weight: 600;
+      margin-right: 6px;
+    }
+
+    /* ── Risk colors ──────────────────────────────────── */
+    .rc-LOW      { color: #34d399; }
+    .rc-MEDIUM   { color: #f59e0b; }
+    .rc-HIGH     { color: #ef4444; }
+    .rc-CRITICAL { color: #a78bfa; }
+  </style>
+</head>
+<body>
+
+  <!-- Offline overlay -->
+  <div id="offline-overlay">
+    <div class="offline-text">OFFLINE</div>
+    <div class="offline-sub">Attempting to reconnect...</div>
+  </div>
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div>
+      <div class="title">PS-003 Intrusion Monitor</div>
+      <div class="title-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC</div>
+    </div>
+    <div class="pills">
+      <div class="pill" id="tp-flow">⚛ Flow</div>
+      <div class="pill" id="tp-divcurl">〜 Div/Curl</div>
+      <div class="pill" id="tp-lyapunov">λ Lyapunov</div>
+      <div class="pill" id="tp-quantum">ψ Quantum</div>
+      <div class="pill" id="tp-clip">🧠 CLIP</div>
+      <div class="pill" id="tp-trajectory">🗺 Trajectory</div>
+    </div>
+    <div style="text-align:right;">
+      <div class="clock" id="tv-clock">00:00:00</div>
+      <div class="clock-date" id="tv-date"></div>
+    </div>
+  </div>
+
+  <!-- Main body -->
+  <div class="main-body">
+    <!-- Left: Heatmap -->
+    <div class="heatmap-panel">
+      <div class="panel-title">Zone Heatmap — ST-GCN Propagation</div>
+      <div class="tv-heatmap" id="tv-heatmap"></div>
+    </div>
+
+    <!-- Right column -->
+    <div class="right-col">
+      <!-- Alert -->
+      <div class="tv-alert" id="tv-alert">
+        <div class="sec-title">Latest Alert</div>
+        <div class="risk-badge" id="tv-risk-badge" style="background:#1a1a22; color:#555;">IDLE</div>
+        <div class="alert-info" id="tv-alert-info">Waiting for events...</div>
+        <div class="alert-meta" id="tv-alert-meta"></div>
+      </div>
+
+      <!-- Physics -->
+      <div class="tv-physics">
+        <div class="tv-phys-item">
+          <div class="phys-name">Divergence</div>
+          <div class="phys-val" id="tv-div" style="color:#888">—</div>
+          <div class="phys-st" id="tv-div-st" style="color:#555">—</div>
+        </div>
+        <div class="tv-phys-item">
+          <div class="phys-name">Curl</div>
+          <div class="phys-val" id="tv-curl" style="color:#888">—</div>
+          <div class="phys-st" id="tv-curl-st" style="color:#555">—</div>
+        </div>
+        <div class="tv-phys-item">
+          <div class="phys-name">Lyapunov λ</div>
+          <div class="phys-val" id="tv-lyap" style="color:#888">—</div>
+          <div class="phys-st" id="tv-lyap-st" style="color:#555">—</div>
+        </div>
+      </div>
+
+      <!-- Trajectory -->
+      <div class="tv-trajectory" id="tv-traj">
+        <div class="traj-icon">✅</div>
+        <div>
+          <div class="traj-text" id="tv-traj-text" style="color:#34d399;">All Clear</div>
+          <div class="traj-detail" id="tv-traj-detail">No suspicious trajectories</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom ticker -->
+  <div class="bottom-ticker">
+    <div class="ticker-track" id="ticker-track">
+      <span class="ticker-item" style="color:#555;">Waiting for events...</span>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+    const API = 'http://localhost:8031';
+    const WS  = 'ws://localhost:8031/ws/alerts';
+    const RC  = { LOW:'#34d399', MEDIUM:'#f59e0b', HIGH:'#ef4444', CRITICAL:'#a78bfa' };
+
+    // Build heatmap cells
+    (function() {
+      const g = document.getElementById('tv-heatmap');
+      for (let i = 0; i < 16; i++) {
+        const c = document.createElement('div');
+        c.className = 'tv-zone';
+        c.id = 'tvz-' + i;
+        c.innerHTML = `
+          <div class="q-overlay" id="tvqo-${i}"></div>
+          <div class="zone-id">B${i+1}</div>
+          <div class="zone-risk-label" id="tvr-${i}" style="color:#34d399">LOW</div>
+          <div class="zone-beh" id="tvb-${i}"></div>
+          <div class="zone-psi" id="tvp-${i}"></div>
+          <div class="zone-cam" id="tvcam-${i}">▲</div>
+        `;
+        g.appendChild(c);
+      }
+    })();
+
+    // Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('tv-clock').textContent = now.toLocaleTimeString();
+      document.getElementById('tv-date').textContent = now.toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Event buffer for ticker
+    const tickerEvents = [];
+    const MAX_TICKER = 20;
+    const zoneBehaviors = {};
+
+    function updateTicker() {
+      const track = document.getElementById('ticker-track');
+      if (tickerEvents.length === 0) return;
+      const items = tickerEvents.map(e => {
+        const ts = e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '';
+        const risk = e.risk_tier || 'LOW';
+        return `<span class="ticker-item"><span class="t-risk rc-${risk}">${risk}</span> Zone ${e.zone_id} · ${e.behavior_label || e.behavior || ''} · ${ts}</span>`;
+      }).join('');
+      track.innerHTML = items + items; // duplicate for seamless scroll
+    }
+
+    function updateHeatmap(hm) {
+      if (!Array.isArray(hm)) return;
+      for (const h of hm) {
+        const z = h.zone_id;
+        const cell = document.getElementById('tvz-' + z);
+        const rEl  = document.getElementById('tvr-' + z);
+        if (!cell || !rEl) continue;
+        const risk = h.risk || 'LOW';
+        const score = Math.min(1, h.score || 0);
+        const color = RC[risk] || RC.LOW;
+        let bg;
+        if (risk === 'HIGH')        bg = `rgba(239,68,68,${(0.25 + score * 0.65).toFixed(3)})`;
+        else if (risk === 'MEDIUM') bg = `rgba(245,158,11,${(0.15 + score * 0.5).toFixed(3)})`;
+        else                        bg = `rgba(52,211,153,${(0.06 + score * 0.15).toFixed(3)})`;
+        cell.style.background = bg;
+        cell.style.borderColor = color + '44';
+        if (risk === 'HIGH') cell.style.boxShadow = '0 0 20px rgba(239,68,68,0.25)';
+        else cell.style.boxShadow = 'none';
+        rEl.textContent = risk;
+        rEl.style.color = color;
+      }
+    }
+
+    function updateQuantum(qf, qs) {
+      if (!Array.isArray(qf)) return;
+      qf.forEach(({zone_id, probability}) => {
+        const ov = document.getElementById('tvqo-' + zone_id);
+        const ps = document.getElementById('tvp-' + zone_id);
+        const cell = document.getElementById('tvz-' + zone_id);
+        if (!ov || !ps || !cell) return;
+        ov.style.background = `rgba(167,139,250,${Math.min(0.7, probability * 0.85)})`;
+        if (probability > 0.05) {
+          cell.classList.add('q-active');
+          ps.textContent = `ψ ${probability.toFixed(2)}`;
+        } else {
+          cell.classList.remove('q-active');
+          ps.textContent = '';
+        }
+      });
+    }
+
+    function updateAlert(evt) {
+      const risk = (evt.reasoning||{}).risk_level || evt.risk_tier || 'LOW';
+      const badge = document.getElementById('tv-risk-badge');
+      const info = document.getElementById('tv-alert-info');
+      const meta = document.getElementById('tv-alert-meta');
+      badge.textContent = risk;
+      badge.style.background = RC[risk] || '#1a1a22';
+      const r = evt.reasoning || {};
+      info.textContent = r.pattern_summary || evt.behavior_label || '';
+      const ts = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '';
+      meta.textContent = `Zone ${evt.zone_id} · ${ts}${evt.pattern_id ? ' · '+evt.pattern_id : ''}`;
+    }
+
+    function updatePhysics(evt) {
+      const d = evt.divergence || 0, c = evt.curl || 0, l = evt.lyapunov || 0;
+      const de = document.getElementById('tv-div'), ce = document.getElementById('tv-curl'), le = document.getElementById('tv-lyap');
+      const ds = document.getElementById('tv-div-st'), cs = document.getElementById('tv-curl-st'), ls = document.getElementById('tv-lyap-st');
+      if (de) { de.textContent = d.toFixed(3); de.style.color = Math.abs(d) > 0.3 ? '#fca5a5' : '#888'; }
+      if (ce) { ce.textContent = c.toFixed(3); ce.style.color = Math.abs(c) > 0.3 ? '#fca5a5' : '#888'; }
+      if (le) { le.textContent = l.toFixed(3); le.style.color = l > 0 ? '#fca5a5' : '#34d399'; }
+      if (ds) { ds.textContent = Math.abs(d) > 0.5 ? 'SCATTER' : Math.abs(d) > 0.3 ? 'ANOMALY' : 'normal'; ds.style.color = Math.abs(d) > 0.3 ? '#fca5a5' : '#555'; }
+      if (cs) { cs.textContent = Math.abs(c) > 0.5 ? 'FIGHT' : Math.abs(c) > 0.3 ? 'ANOMALY' : 'normal'; cs.style.color = Math.abs(c) > 0.3 ? '#fca5a5' : '#555'; }
+      if (ls) { ls.textContent = l > 0 ? 'CHAOTIC' : 'stable'; ls.style.color = l > 0 ? '#fca5a5' : '#555'; }
+    }
+
+    function updateTrajectory(evt) {
+      const traj = evt.trajectory || {};
+      const icon = document.querySelector('.traj-icon');
+      const text = document.getElementById('tv-traj-text');
+      const detail = document.getElementById('tv-traj-detail');
+      if (traj.is_suspicious) {
+        if (icon) icon.textContent = '⚠️';
+        if (text) { text.textContent = `${traj.label.toUpperCase()} — Zone ${evt.zone_id}`; text.style.color = '#ef4444'; }
+        if (detail) detail.textContent = `Entropy: ${traj.path_entropy.toFixed(2)} · Eff: ${traj.displacement_efficiency.toFixed(2)} · Osc: ${traj.oscillation_count}`;
+      } else {
+        if (icon) icon.textContent = '✅';
+        if (text) { text.textContent = 'All Clear'; text.style.color = '#34d399'; }
+        if (detail) detail.textContent = 'No suspicious trajectories';
+      }
+    }
+
+    function updateZoneBehavior(evt) {
+      const z = evt.zone_id;
+      const risk = evt.risk_tier || 'LOW';
+      const beh = evt.behavior || '';
+      const traj = evt.trajectory || {};
+      if (risk !== 'LOW' && beh) {
+        let label = beh.replace(/_/g, ' ');
+        if (traj.is_suspicious) label = traj.label.toLowerCase();
+        zoneBehaviors[z] = label;
+      }
+      for (const [zz, lb] of Object.entries(zoneBehaviors)) {
+        const el = document.getElementById('tvb-' + zz);
+        if (el) el.textContent = lb;
+      }
+    }
+
+    // Feature pills
+    const pillTimeouts = {};
+    function updatePills(evt) {
+      const checks = [
+        { id: 'tp-flow',       cls: 'pulse-flow',       active: (evt.flow_magnitude||0) > 2 },
+        { id: 'tp-divcurl',    cls: 'pulse-divcurl',    active: Math.abs(evt.divergence||0)>0.3 || Math.abs(evt.curl||0)>0.3 },
+        { id: 'tp-lyapunov',   cls: 'pulse-lyapunov',   active: (evt.lyapunov||0) > 0 },
+        { id: 'tp-quantum',    cls: 'pulse-quantum',    active: (evt.quantum_state||'') === 'diffusing' },
+        { id: 'tp-clip',       cls: 'pulse-clip',       active: (evt.clip_score||0) > 0.4 },
+        { id: 'tp-trajectory', cls: 'pulse-trajectory', active: !!(evt.trajectory && evt.trajectory.is_suspicious) },
+      ];
+      for (const {id, cls, active} of checks) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (active) {
+          el.classList.add(cls);
+          clearTimeout(pillTimeouts[id]);
+          pillTimeouts[id] = setTimeout(() => el.classList.remove(cls), 4000);
+        }
+      }
+    }
+
+    // Camera placements
+    fetch(API + '/aqhso/placements')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        if (data && Array.isArray(data.block_assignments)) {
+          for (const b of data.block_assignments) {
+            const el = document.getElementById('tvcam-' + b.zone_id);
+            if (el) el.style.display = 'block';
+          }
+        }
+      })
+      .catch(() => {});
+
+    function processEvent(evt) {
+      tickerEvents.unshift(evt);
+      if (tickerEvents.length > MAX_TICKER) tickerEvents.pop();
+      updateTicker();
+      if (Array.isArray(evt.heatmap)) updateHeatmap(evt.heatmap);
+      if (evt.quantum_field) updateQuantum(evt.quantum_field, evt.quantum_state);
+      updateAlert(evt);
+      updatePhysics(evt);
+      updateTrajectory(evt);
+      updateZoneBehavior(evt);
+      updatePills(evt);
+    }
+
+    // Load initial events
+    fetch(API + '/events?limit=20')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(evts => {
+        if (!Array.isArray(evts)) return;
+        [...evts].reverse().forEach(processEvent);
+      })
+      .catch(() => {});
+
+    // WebSocket auto-reconnect
+    let wsRetry = 2000;
+    let connected = false;
+
+    function wsConnect() {
+      const ws = new WebSocket(WS);
+      ws.onopen = () => {
+        wsRetry = 2000;
+        connected = true;
+        document.getElementById('offline-overlay').classList.remove('show');
+      };
+      ws.onclose = () => {
+        connected = false;
+        document.getElementById('offline-overlay').classList.add('show');
+        setTimeout(wsConnect, Math.min(wsRetry, 10000));
+        wsRetry = Math.min(wsRetry * 2, 10000);
+      };
+      ws.onerror = () => ws.close();
+      ws.onmessage = (e) => {
+        let evt;
+        try { evt = JSON.parse(e.data); } catch { return; }
+        if (evt.type === 'system_state' || evt.type === 'system_reset') return;
+        processEvent(evt);
+      };
+    }
+    wsConnect();
+  </script>
+</body>
+</html>

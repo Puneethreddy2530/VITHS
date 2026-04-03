@@ -242,6 +242,99 @@ class PatternTracker:
 
 
 # ══════════════════════════════════════════════════════════════════
+# 5. TRAJECTORY / MULE TOPOLOGY ANALYZER
+# ══════════════════════════════════════════════════════════════════
+
+class TrajectoryAnalyzer:
+    """
+    Tracks zone-visit sequences per detection event and computes:
+      1. Path entropy            — high (>2.0) = suspicious zigzag / mule
+      2. Displacement efficiency — low (<0.35) = doubling back / loitering
+      3. Oscillation score       — >3 reversals in 8 steps = classic mule
+    """
+    def __init__(self, window: int = 10):
+        self.window = window
+        # per-zone deque of recently visited zone_ids
+        self._trails: dict[int, deque] = defaultdict(lambda: deque(maxlen=window))
+
+    def update(self, zone_id: int, detected_zone: int) -> dict:
+        """
+        Record that `detected_zone` was visited in the context of
+        surveillance `zone_id`, and return trajectory metrics.
+        """
+        trail = self._trails[zone_id]
+        trail.append(detected_zone)
+
+        entropy    = self._path_entropy(trail)
+        efficiency = self._displacement_efficiency(trail)
+        osc_count  = self._oscillation_count(trail)
+
+        is_suspicious = (
+            entropy > 2.0 or
+            (len(trail) >= 5 and efficiency < 0.35) or
+            osc_count > 3
+        )
+
+        # Determine label
+        if osc_count > 3 and efficiency < 0.35:
+            label = "Mule behavior"
+        elif entropy > 2.0:
+            label = "Zigzag pattern"
+        elif len(trail) >= 5 and efficiency < 0.35:
+            label = "Chokepoint loiter"
+        else:
+            label = "Normal"
+
+        return {
+            "path_entropy":            round(entropy, 3),
+            "displacement_efficiency": round(efficiency, 3),
+            "oscillation_count":       osc_count,
+            "is_suspicious":           is_suspicious,
+            "label":                   label,
+        }
+
+    # ── metrics ────────────────────────────────────────────────────
+    @staticmethod
+    def _path_entropy(trail: deque) -> float:
+        """Shannon entropy over zone visit frequencies."""
+        if len(trail) < 2:
+            return 0.0
+        counts: dict[int, int] = defaultdict(int)
+        for z in trail:
+            counts[z] += 1
+        n = len(trail)
+        h = 0.0
+        for c in counts.values():
+            p = c / n
+            if p > 0:
+                h -= p * math.log(p)
+        return h
+
+    @staticmethod
+    def _displacement_efficiency(trail: deque) -> float:
+        """Ratio of unique zones visited to total steps."""
+        if len(trail) == 0:
+            return 1.0
+        return len(set(trail)) / len(trail)
+
+    @staticmethod
+    def _oscillation_count(trail: deque) -> int:
+        """Count direction reversals in last 8 zone visits."""
+        recent = list(trail)[-8:]
+        if len(recent) < 3:
+            return 0
+        reversals = 0
+        for i in range(2, len(recent)):
+            d_prev = recent[i-1] - recent[i-2]
+            d_curr = recent[i]   - recent[i-1]
+            if d_prev != 0 and d_curr != 0 and (
+                (d_prev > 0 and d_curr < 0) or (d_prev < 0 and d_curr > 0)
+            ):
+                reversals += 1
+        return reversals
+
+
+# ══════════════════════════════════════════════════════════════════
 # UNIFIED PIPELINE (combines Phase 1 + Phase 2)
 # ══════════════════════════════════════════════════════════════════
 
@@ -258,6 +351,7 @@ class Pipeline:
         self.threshold  = AQHSOThreshold()
         self.propagator = STGCNPropagator()
         self.patterns   = PatternTracker()
+        self.trajectory = TrajectoryAnalyzer(window=10)
         # Quantum tracker — one per pipeline (tracks a single intruder)
         self.q_tracker  = SchrodingerTracker(n_zones=16, grid_w=4)
 
@@ -299,6 +393,9 @@ class Pipeline:
         if is_anomaly and behavior != "normal":
             pattern = self.patterns.record(zone_id, behavior)
 
+        # Trajectory / mule topology analysis
+        traj = self.trajectory.update(zone_id, zone_id)
+
         # ST-GCN propagation
         if is_anomaly:
             self.threshold.record_alert(zone_id)
@@ -314,6 +411,8 @@ class Pipeline:
             "heatmap":         self.propagator.heatmap(),
             # Quantum tracker output — drives the wavefunction heatmap overlay
             "quantum":         quantum_state,
+            # Trajectory topology (mule / zigzag detection)
+            "trajectory":      traj,
         })
         return result
 
