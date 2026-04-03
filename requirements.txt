@@ -18,8 +18,8 @@ faiss-cpu==1.13.2
 scikit-learn==1.6.1
 numpy==2.4.3
 
-# Gemini AI
-google-generativeai==0.8.6
+# Azure OpenAI
+openai>=1.14.0
 
 # Visualization (scripts)
 matplotlib==3.10.3

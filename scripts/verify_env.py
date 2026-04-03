@@ -35,7 +35,7 @@ PKGS = [
     ("fastapi",             "FastAPI"),
     ("uvicorn",             "Uvicorn"),
     ("dotenv",              "python-dotenv"),
-    ("google.generativeai", "Gemini SDK"),
+    ("openai",              "OpenAI SDK (Azure)"),
     ("PIL",                 "Pillow"),
     ("pyttsx3",             "pyttsx3 TTS (voice alerts)"),
 ]

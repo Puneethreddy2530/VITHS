@@ -1,18 +1,18 @@
 """
 Phase 4 — reasoning.py
-Gemini-powered causal reasoning layer.
+Azure OpenAI-powered causal reasoning layer.
   - Explainable alerts: WHY this event is flagged
   - Predictive timeline: WHEN the next event is likely
   - Action recommendation: WHAT the guard should do
-  - Privacy-preserving: no images sent to Gemini, only metadata
+  - Privacy-preserving: no images sent to LLM, only metadata
 
-Cite: Lewis et al. (2020) RAG · Gemini 1.5 Flash (free tier)
+Cite: Lewis et al. (2020) RAG · Azure OpenAI GPT-4o
 """
 
 import json, os
 from datetime import datetime
 from typing import Optional
-import google.generativeai as genai
+from openai import AzureOpenAI
 
 try:
     from dotenv import load_dotenv
@@ -22,10 +22,11 @@ try:
 except ImportError:
     pass
 
-# ── Set your Gemini API key here ───────────────────────────────────
-# Free tier: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_KEY_HERE")
-GEMINI_MODEL   = "gemini-1.5-flash"   # fast + free tier
+# ── Azure OpenAI configuration ────────────────────────────────────
+AZURE_OPENAI_API_KEY         = os.environ.get("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_ENDPOINT        = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_API_VERSION     = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+AZURE_OPENAI_DEPLOYMENT_NAME = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
 
 _FALLBACK_RESPONSES = {
     "HIGH":   {
@@ -54,14 +55,18 @@ _FALLBACK_RESPONSES = {
 
 class ReasoningEngine:
     def __init__(self):
-        if GEMINI_API_KEY == "YOUR_KEY_HERE":
-            print("  [WARN] Gemini API key not set — using fallback templates")
-            self._use_gemini = False
+        if not AZURE_OPENAI_API_KEY or not AZURE_OPENAI_ENDPOINT:
+            print("  [WARN] Azure OpenAI credentials not set — using fallback templates")
+            self._use_llm = False
         else:
-            genai.configure(api_key=GEMINI_API_KEY)
-            self._gemini     = genai.GenerativeModel(GEMINI_MODEL)
-            self._use_gemini = True
-            print("  Gemini reasoning engine ready.")
+            self._client = AzureOpenAI(
+                api_key=AZURE_OPENAI_API_KEY,
+                api_version=AZURE_OPENAI_API_VERSION,
+                azure_endpoint=AZURE_OPENAI_ENDPOINT,
+            )
+            self._deployment = AZURE_OPENAI_DEPLOYMENT_NAME
+            self._use_llm = True
+            print("  Azure OpenAI reasoning engine ready.")
 
     def _build_prompt(self, event: dict, similar: list, recurrence: int) -> str:
         # Format similar events (past memory recalls)
@@ -100,17 +105,25 @@ Respond ONLY with a valid JSON object, no markdown, no explanation outside JSON:
         """
         Main reasoning call.
         Returns structured risk assessment.
-        Falls back to templates if Gemini unavailable.
+        Falls back to templates if Azure OpenAI unavailable.
         """
         risk_tier = event.get("risk_tier", "LOW")
 
-        if not self._use_gemini:
+        if not self._use_llm:
             return _FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"])
 
         try:
             prompt   = self._build_prompt(event, similar, recurrence)
-            response = self._gemini.generate_content(prompt)
-            text     = response.text.strip()
+            response = self._client.chat.completions.create(
+                model=self._deployment,
+                messages=[
+                    {"role": "system", "content": "You are a security analysis AI. Respond only with valid JSON."},
+                    {"role": "user",   "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=512,
+            )
+            text = response.choices[0].message.content.strip()
 
             # Strip any accidental markdown fences
             if text.startswith("```"):
@@ -127,7 +140,7 @@ Respond ONLY with a valid JSON object, no markdown, no explanation outside JSON:
             return result
 
         except Exception as e:
-            print(f"  [Gemini fallback] {e}")
+            print(f"  [Azure OpenAI fallback] {e}")
             return _FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"])
 
     def format_alert_card(self, event: dict, reasoning: dict) -> str:

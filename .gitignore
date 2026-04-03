@@ -12,9 +12,13 @@ env/
 .venv/
 .env/
 
-# Environment variables / secrets
+# ── Environment variables / secrets (CRITICAL) ──
+# Never commit API keys or credentials
 .env
 .env.*
+.env.local
+.env.production
+.env.staging
 !.env.example
 
 # pytest

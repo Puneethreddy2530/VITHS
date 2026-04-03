@@ -1,8 +1,8 @@
 'use strict';
 
 /* ── Config ─────────────────────────────────────────────────── */
-const API_BASE = 'http://localhost:8031';
-const WS_URL   = 'ws://localhost:8031/ws/alerts';
+const API_BASE = 'http://localhost:8000';
+const WS_URL   = 'ws://localhost:8000/ws/alerts';
 
 const RISK_COLOR = {
   LOW:      '#34d399',
@@ -25,56 +25,131 @@ let _latestEvent = null;
 let _placements  = {};
 let _zoneBehaviors = {};
 
-/* ── Build the 16 heatmap cells once on load ────────────────── */
-(function buildHeatmapCells() {
-  const grid = document.getElementById('heatmap-grid');
-  for (let i = 0; i < 16; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'zone-cell';
-    cell.id        = 'zone-' + i;
-    cell.style.background  = 'rgba(52,211,153,0.06)';
-    cell.style.borderColor = '#34d39922';
-    cell.innerHTML = `
-      <div class="quantum-overlay" id="qo-${i}"></div>
-      <div class="zone-num">B${i + 1}</div>
-      <div class="zone-risk" id="zr-${i}" style="color:#34d399">LOW</div>
-      <div class="zone-behavior" id="zb-${i}"></div>
-      <div class="zone-prob" id="zp-${i}"></div>
-      <span class="zone-cam-icon" id="zc-${i}">▲</span>
-      <div class="quantum-label" id="ql-${i}"></div>
-    `;
-    grid.appendChild(cell);
+/* ── SVG Zone Definitions — Triangular Hostel ──────────────── */
+const ZONE_DEFS = [
+  // Outer wing rooms (6 zones along perimeter)
+  { id:0,  pts:"500,40 730,450 670,485 500,195",       label:"B1",  cat:"outer", cx:600, cy:293 },
+  { id:1,  pts:"730,450 960,860 840,775 670,485",      label:"B2",  cat:"outer", cx:800, cy:643 },
+  { id:2,  pts:"960,860 600,860 585,775 840,775",      label:"B3",  cat:"outer", cx:746, cy:818 },
+  { id:3,  pts:"400,860 40,860 165,775 415,775",       label:"B4",  cat:"outer", cx:255, cy:818 },
+  { id:4,  pts:"40,860 270,450 332,485 165,775",       label:"B5",  cat:"outer", cx:202, cy:643 },
+  { id:5,  pts:"270,450 500,40 500,195 332,485",       label:"B6",  cat:"outer", cx:400, cy:293 },
+  // Inner corridor rooms (6 zones)
+  { id:6,  pts:"500,195 670,485 605,518 500,345",      label:"B7",  cat:"inner", cx:569, cy:386 },
+  { id:7,  pts:"670,485 840,775 710,690 605,518",      label:"B8",  cat:"inner", cx:706, cy:617 },
+  { id:8,  pts:"840,775 585,775 570,690 710,690",      label:"B9",  cat:"inner", cx:676, cy:733 },
+  { id:9,  pts:"415,775 165,775 290,690 430,690",      label:"B10", cat:"inner", cx:325, cy:733 },
+  { id:10, pts:"165,775 332,485 395,518 290,690",      label:"B11", cat:"inner", cx:296, cy:617 },
+  { id:11, pts:"332,485 500,195 500,345 395,518",      label:"B12", cat:"inner", cx:432, cy:386 },
+  // Center zones (courtyard / common areas)
+  { id:12, pts:"500,345 605,518 500,575 395,518",      label:"C1",  cat:"center", cx:500, cy:489 },
+  { id:13, pts:"605,518 710,690 500,690 500,575",      label:"C2",  cat:"center", cx:579, cy:618 },
+  { id:14, pts:"500,690 290,690 395,518 500,575",      label:"C3",  cat:"center", cx:421, cy:618 },
+  // Entrance gate
+  { id:15, pts:"400,860 600,860 585,775 415,775",      label:"Gate", cat:"entrance", cx:500, cy:818 },
+];
+
+// Adjacency for quantum diffusion glow
+const ZONE_ADJ = {
+  0:[1,5,6,11], 1:[0,2,7,6], 2:[1,3,8,15], 3:[2,4,9,15],
+  4:[3,5,10,9], 5:[0,4,11,10], 6:[0,1,7,11,12], 7:[1,6,8,13],
+  8:[2,7,9,13], 9:[3,8,10,14], 10:[4,5,9,11,14], 11:[0,5,6,10,12],
+  12:[6,11,13,14], 13:[7,8,12,14], 14:[9,10,12,13], 15:[2,3]
+};
+
+/* ── Zone runtime state ───────────────────────────────────── */
+const _zoneState = {};
+for (const z of ZONE_DEFS) _zoneState[z.id] = { score:0, risk:'LOW', behavior:'', psi:0 };
+
+/* ── Build SVG zone polygons on load ──────────────────────── */
+(function buildSVGMap() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const polyG  = document.getElementById('zone-polys');
+  const labelG = document.getElementById('zone-labels');
+  if (!polyG || !labelG) return;
+
+  for (const z of ZONE_DEFS) {
+    // Polygon
+    const poly = document.createElementNS(NS, 'polygon');
+    poly.setAttribute('points', z.pts);
+    poly.setAttribute('id', 'zpoly-' + z.id);
+    poly.setAttribute('class', 'zone-poly');
+    poly.setAttribute('data-zone', z.id);
+    polyG.appendChild(poly);
+
+    // Label text
+    const txt = document.createElementNS(NS, 'text');
+    txt.setAttribute('x', z.cx);
+    txt.setAttribute('y', z.cy - 6);
+    txt.setAttribute('class', 'zone-label-text');
+    txt.textContent = z.label;
+    labelG.appendChild(txt);
+
+    // Risk text below label
+    const rtxt = document.createElementNS(NS, 'text');
+    rtxt.setAttribute('x', z.cx);
+    rtxt.setAttribute('y', z.cy + 10);
+    rtxt.setAttribute('class', 'zone-risk-text');
+    rtxt.setAttribute('id', 'zlbl-' + z.id);
+    rtxt.textContent = 'LOW';
+    labelG.appendChild(rtxt);
+
+    // Psi text
+    const ptxt = document.createElementNS(NS, 'text');
+    ptxt.setAttribute('x', z.cx);
+    ptxt.setAttribute('y', z.cy + 22);
+    ptxt.setAttribute('class', 'zone-psi-text');
+    ptxt.setAttribute('id', 'zpsi-' + z.id);
+    ptxt.textContent = '';
+    labelG.appendChild(ptxt);
+
+    // Tooltip events
+    poly.addEventListener('mouseenter', (e) => showTooltip(e, z));
+    poly.addEventListener('mousemove',  (e) => moveTooltip(e));
+    poly.addEventListener('mouseleave', hideTooltip);
   }
 })();
 
-/* ── Heatmap update ─────────────────────────────────────────── */
+/* ── Score → fill color ──────────────────────────────────── */
+function scoreToFill(score, risk) {
+  const s = Math.min(1, Math.max(0, score));
+  if (s > 0.8)      return `rgba(239,68,68,${0.35 + s * 0.5})`;
+  if (s > 0.5)      return `rgba(245,158,11,${0.2 + s * 0.45})`;
+  if (s > 0.2)      return `rgba(245,200,11,${0.1 + s * 0.3})`;
+  return `rgba(52,211,153,${0.06 + s * 0.2})`;
+}
+
+function scoreToStroke(score, risk) {
+  if (risk === 'HIGH')   return 'rgba(239,68,68,0.6)';
+  if (risk === 'MEDIUM') return 'rgba(245,158,11,0.4)';
+  return 'rgba(52,211,153,0.2)';
+}
+
+/* ── Update heatmap polygons ──────────────────────────────── */
 function updateHeatmap(heatmap) {
   if (!Array.isArray(heatmap)) return;
   for (const h of heatmap) {
-    const z      = h.zone_id;
-    const cell   = document.getElementById('zone-' + z);
-    const riskEl = document.getElementById('zr-' + z);
-    if (!cell || !riskEl) continue;
+    const z    = h.zone_id;
+    const poly = document.getElementById('zpoly-' + z);
+    const lbl  = document.getElementById('zlbl-' + z);
+    if (!poly) continue;
 
-    const risk  = h.risk  || 'LOW';
+    const risk  = h.risk || 'LOW';
     const score = Math.min(1, h.score || 0);
-    const color = RISK_COLOR[risk] || RISK_COLOR.LOW;
+    _zoneState[z] = { ..._zoneState[z], score, risk };
 
-    let bg;
-    if      (risk === 'HIGH')   bg = `rgba(239,68,68,${(0.2 + score * 0.7).toFixed(3)})`;
-    else if (risk === 'MEDIUM') bg = `rgba(245,158,11,${(0.15 + score * 0.6).toFixed(3)})`;
-    else                        bg = `rgba(52,211,153,${(0.06 + score * 0.15).toFixed(3)})`;
+    poly.style.fill   = scoreToFill(score, risk);
+    poly.style.stroke = scoreToStroke(score, risk);
+    poly.classList.toggle('risk-HIGH', risk === 'HIGH');
 
-    cell.style.background  = bg;
-    cell.style.borderColor = color + '44';
-    if (risk === 'HIGH') cell.style.boxShadow = '0 0 12px rgba(239,68,68,0.2)';
-    else cell.style.boxShadow = 'none';
-    riskEl.textContent     = risk;
-    riskEl.style.color     = color;
+    if (lbl) {
+      lbl.textContent = risk;
+      lbl.style.fill = (RISK_COLOR[risk] || '#666') + '99';
+    }
   }
 }
 
-/* ── Zone behavior labels on heatmap ────────────────────────── */
+/* ── Zone behavior labels ─────────────────────────────────── */
 function updateZoneBehaviors(evt) {
   if (!evt) return;
   const zoneId = evt.zone_id;
@@ -86,72 +161,116 @@ function updateZoneBehaviors(evt) {
     let label = behavior.replace(/_/g, ' ');
     if (traj.is_suspicious) label = traj.label.toLowerCase();
     _zoneBehaviors[zoneId] = label;
-  }
-
-  for (const [z, lbl] of Object.entries(_zoneBehaviors)) {
-    const el = document.getElementById('zb-' + z);
-    if (el) el.textContent = lbl;
+    _zoneState[zoneId] = { ..._zoneState[zoneId], behavior: label };
   }
 }
 
-/* ── Quantum probability overlay ────────────────────────────── */
+/* ── Quantum overlay on SVG polygons ──────────────────────── */
 function updateQuantum(quantum) {
-  if (!quantum || !Array.isArray(quantum.field)) return;
-  for (const q of quantum.field) {
-    const probEl = document.getElementById('zp-' + q.zone_id);
-    if (!probEl) continue;
-    if (q.probability > 0.01) {
-      probEl.textContent = 'ψ ' + (q.probability * 100).toFixed(1) + '%';
-      probEl.classList.add('show');
-    } else {
-      probEl.textContent = '';
-      probEl.classList.remove('show');
-    }
-  }
+  // handled by updateQuantumOverlay for SVG
 }
 
-/* ── Quantum overlay (flat quantum_field array) ────────────── */
 function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
   if (!quantumField) return;
   quantumField.forEach(({ zone_id, probability }) => {
-    const overlay = document.getElementById(`qo-${zone_id}`);
-    const label   = document.getElementById(`ql-${zone_id}`);
-    if (!overlay || !label) return;
+    const poly = document.getElementById('zpoly-' + zone_id);
+    const ptxt = document.getElementById('zpsi-' + zone_id);
+    if (!poly) return;
 
-    const alpha = Math.min(0.75, probability * 0.9);
-    overlay.style.background = `rgba(167, 139, 250, ${alpha})`;
+    _zoneState[zone_id] = { ..._zoneState[zone_id], psi: probability };
 
     if (probability > 0.05) {
-      overlay.classList.add('quantum-active');
-      label.textContent = `ψ ${probability.toFixed(2)}`;
+      if (ptxt) ptxt.textContent = `ψ ${probability.toFixed(2)}`;
+      if (quantumState === 'diffusing') {
+        poly.classList.add('quantum-diffusing');
+        // Also pulse neighbors
+        for (const nbr of (ZONE_ADJ[zone_id] || [])) {
+          const np = document.getElementById('zpoly-' + nbr);
+          if (np && probability > 0.15) np.classList.add('quantum-diffusing');
+        }
+      }
     } else {
-      overlay.classList.remove('quantum-active');
-      label.textContent = '';
+      if (ptxt) ptxt.textContent = '';
+      poly.classList.remove('quantum-diffusing');
     }
   });
 
+  // Clear diffusing after a delay
+  setTimeout(() => {
+    document.querySelectorAll('.quantum-diffusing').forEach(el => {
+      el.classList.remove('quantum-diffusing');
+    });
+  }, 3000);
+
   const badge = document.getElementById('quantum-state-badge');
   if (badge) {
-    const colors = {
-      tracking:  '#34d399',
-      diffusing: '#a78bfa',
-      collapsed: '#f59e0b',
-      idle:      '#444',
-    };
+    const colors = { tracking:'#34d399', diffusing:'#a78bfa', collapsed:'#f59e0b', idle:'#444' };
     badge.textContent = `ψ ${quantumState || 'idle'} · H=${(quantumEntropy || 0).toFixed(2)}`;
     badge.style.color = colors[quantumState] || '#666';
   }
 }
 
-/* ── Camera placement ▲ markers ─────────────────────────────── */
+/* ── Camera placement ▲ markers on SVG ─────────────────────── */
 function applyPlacements(data) {
   if (!data || !Array.isArray(data.block_assignments)) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const camG = document.getElementById('cam-icons');
+  if (!camG) return;
   _placements = {};
   for (const b of data.block_assignments) {
     _placements[b.zone_id] = true;
-    const el = document.getElementById('zc-' + b.zone_id);
-    if (el) el.style.display = 'block';
+    const def = ZONE_DEFS.find(z => z.id === b.zone_id);
+    if (!def) continue;
+    const txt = document.createElementNS(NS, 'text');
+    txt.setAttribute('x', def.cx + 20);
+    txt.setAttribute('y', def.cy - 15);
+    txt.setAttribute('class', 'cam-marker');
+    txt.textContent = '▲';
+    camG.appendChild(txt);
   }
+}
+
+/* ── Trajectory path drawing ──────────────────────────────── */
+const _trajHistory = [];
+function updateTrajectoryPath(evt) {
+  if (!evt || evt.zone_id == null) return;
+  const def = ZONE_DEFS.find(z => z.id === evt.zone_id);
+  if (!def) return;
+  _trajHistory.push({ x: def.cx, y: def.cy });
+  if (_trajHistory.length > 10) _trajHistory.shift();
+
+  const line = document.getElementById('traj-path');
+  if (!line) return;
+  const traj = evt.trajectory || {};
+  if (traj.is_suspicious && _trajHistory.length >= 2) {
+    line.setAttribute('points', _trajHistory.map(p => `${p.x},${p.y}`).join(' '));
+    line.classList.add('active');
+  } else {
+    line.classList.remove('active');
+  }
+}
+
+/* ── Map tooltip ──────────────────────────────────────────── */
+function showTooltip(e, zoneDef) {
+  const tt = document.getElementById('map-tooltip');
+  const st = _zoneState[zoneDef.id] || {};
+  document.getElementById('tt-zone').textContent = `Zone ${zoneDef.label} (${zoneDef.cat})`;
+  document.getElementById('tt-risk').textContent = `Risk: ${st.risk || 'LOW'}`;
+  document.getElementById('tt-risk').style.color = RISK_COLOR[st.risk] || '#34d399';
+  document.getElementById('tt-behavior').textContent = st.behavior ? `Behavior: ${st.behavior}` : '';
+  document.getElementById('tt-score').textContent = `Score: ${(st.score || 0).toFixed(3)}${st.psi > 0.01 ? ` · ψ ${st.psi.toFixed(2)}` : ''}`;
+  tt.style.display = 'block';
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  const tt = document.getElementById('map-tooltip');
+  const container = document.getElementById('svg-map-container');
+  const rect = container.getBoundingClientRect();
+  tt.style.left = (e.clientX - rect.left + 12) + 'px';
+  tt.style.top  = (e.clientY - rect.top - 10) + 'px';
+}
+function hideTooltip() {
+  document.getElementById('map-tooltip').style.display = 'none';
 }
 
 /* ── Feature pill pulse logic ──────────────────────────────── */
@@ -481,16 +600,29 @@ function updateConnectionBadge() {
 
 /* ── Handle system reset message ────────────────────────────── */
 function handleSystemReset() {
-  // Clear heatmap
+  // Clear SVG heatmap
   for (let i = 0; i < 16; i++) {
-    const cell = document.getElementById('zone-' + i);
-    const risk = document.getElementById('zr-' + i);
-    const beh  = document.getElementById('zb-' + i);
-    if (cell) { cell.style.background = 'rgba(52,211,153,0.06)'; cell.style.borderColor = '#34d39922'; cell.style.boxShadow = 'none'; }
-    if (risk) { risk.textContent = 'LOW'; risk.style.color = '#34d399'; }
-    if (beh)  { beh.textContent = ''; }
+    const poly = document.getElementById('zpoly-' + i);
+    const risk = document.getElementById('zlbl-' + i);
+    const psi  = document.getElementById('zpsi-' + i);
+    if (poly) { 
+      poly.style.fill = 'rgba(52,211,153,0.08)'; 
+      poly.style.stroke = 'rgba(52,211,153,0.15)';
+      poly.classList.remove('risk-HIGH', 'quantum-diffusing');
+    }
+    if (risk) { risk.textContent = 'LOW'; risk.style.fill = 'rgba(255,255,255,0.35)'; }
+    if (psi)  { psi.textContent = ''; }
+    _zoneState[i] = { score:0, risk:'LOW', behavior:'', psi:0 };
   }
   _zoneBehaviors = {};
+  
+  // Clear trajectory path
+  _trajHistory.length = 0;
+  const tline = document.getElementById('traj-path');
+  if (tline) {
+    tline.setAttribute('points', '');
+    tline.classList.remove('active');
+  }
   // Clear feed
   const feed = document.getElementById('event-feed');
   feed.innerHTML = '<p class="feed-empty" id="feed-empty">No events yet</p>';
@@ -592,6 +724,7 @@ function loadInitialData() {
       renderAlertCard(latest);
       updatePhysics(latest);
       updateTrajectory(latest.trajectory);
+      updateTrajectoryPath(latest);
       updateFeaturePills(latest);
       updateZoneBehaviors(latest);
     })
@@ -651,6 +784,7 @@ function connect() {
     renderAlertCard(evt);
     updatePhysics(evt);
     updateTrajectory(evt.trajectory);
+    updateTrajectoryPath(evt);
     updateFeaturePills(evt);
     updateZoneBehaviors(evt);
   };

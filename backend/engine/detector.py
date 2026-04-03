@@ -21,12 +21,12 @@ from sklearn.ensemble import IsolationForest
 # ── Config ─────────────────────────────────────────────────────────
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 YOLO_EVERY      = 3     # run YOLO every N frames
-CLIP_EVERY      = 3     # run CLIP every N frames
-IFOREST_EVERY   = 5     # run IForest every N frames
+CLIP_EVERY      = 15    # run CLIP every N frames
+IFOREST_EVERY   = 10    # run IForest every N frames
 WARMUP_FRAMES   = 150   # collect normal features before fitting IForest
 ANOMALY_THRESH  = 0.42  # CLIP anomaly probability threshold (tune this)
 IFOREST_THRESH  = -0.08 # IForest score threshold (more negative = more anomalous)
-CONFIDENCE_MIN  = 0.40  # minimum YOLO confidence
+CONFIDENCE_MIN  = 0.25  # minimum YOLO confidence
 
 # Physics-based thresholds (fluid dynamics on optical flow)
 DIV_THRESH      = 0.5   # divergence  > threshold → panic/scatter
@@ -100,20 +100,20 @@ class Detector:
         self.prev_gray   = None
         self.mag_history = deque(maxlen=MAG_HISTORY_LEN)  # for Lyapunov
 
+        # Cache for skip frames
+        self.last_yolo_dets = []
+        self.last_clip_score = 0.0
+        self.last_clip_label = ""
+        self.last_iforest_score = 0.0
+
         print("  All models loaded.\n")
 
     # ── Optical flow features (5-dim) ─────────────────────────────
-    def _flow_features(self, gray):
-        if self.prev_gray is None:
-            self.prev_gray = gray
+    def _flow_features_from_flow(self, flow):
+        """Extract 5-dim feature vector from a pre-computed flow field."""
+        if flow is None:
             return np.zeros(5, dtype=np.float32)
-        flow = cv2.calcOpticalFlowFarneback(
-            self.prev_gray, gray, None,
-            pyr_scale=0.5, levels=3, winsize=15,
-            iterations=3, poly_n=5, poly_sigma=1.2, flags=0
-        )
         mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-        self.prev_gray = gray
         return np.array([
             mag.mean(), mag.std(), mag.max(),
             ang.mean(), ang.std()
@@ -193,16 +193,18 @@ class Detector:
 
     # ── YOLO detections ───────────────────────────────────────────
     def _yolo_detections(self, frame_bgr):
+        # Run YOLO on the native frame (480x360) for better detection confidence
         results  = self.yolo(frame_bgr, verbose=False)[0]
         detections = []
         for box in results.boxes:
             cls_id = int(box.cls[0])
             conf   = float(box.conf[0])
             if cls_id in WATCH_CLASSES and conf >= CONFIDENCE_MIN:
+                x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
                 detections.append({
                     "class":      WATCH_CLASSES[cls_id],
                     "confidence": round(conf, 3),
-                    "bbox":       [round(float(v), 1) for v in box.xyxy[0]]
+                    "bbox":       [round(x1,1), round(y1,1), round(x2,1), round(y2,1)]
                 })
         return detections
 
@@ -215,42 +217,42 @@ class Detector:
         self.frame_count += 1
         fc = self.frame_count
 
-        resized  = cv2.resize(frame_bgr, (320, 240))
+        resized  = cv2.resize(frame_bgr, (160, 120))
         gray     = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY).astype(np.float32)
 
-        # Raw optical flow (needed for both classic features AND physics)
+        # Compute optical flow ONCE — reuse for features + physics
         raw_flow = None
         if self.prev_gray is not None:
             raw_flow = cv2.calcOpticalFlowFarneback(
                 self.prev_gray, gray, None,
-                pyr_scale=0.5, levels=3, winsize=15,
-                iterations=3, poly_n=5, poly_sigma=1.2, flags=0
+                pyr_scale=0.5, levels=2, winsize=11,
+                iterations=2, poly_n=5, poly_sigma=1.2, flags=0
             )
+        self.prev_gray = gray  # store for next frame
 
-        features = self._flow_features(gray)   # updates self.prev_gray internally
+        # Extract features from the SAME flow (no recomputation)
+        features = self._flow_features_from_flow(raw_flow)
 
         # Track rolling magnitude for Lyapunov
-        self.mag_history.append(float(features[0]))  # features[0] == mag.mean()
+        self.mag_history.append(float(features[0]))
 
-        # Compute physics signals if flow is available
+        # Compute physics signals from the SAME flow
         if raw_flow is not None:
             phys = self.physics_features(raw_flow, self.mag_history)
         else:
             phys = {"divergence": 0.0, "curl": 0.0, "lyapunov": 0.0}
 
-        yolo_dets    = []
-        clip_score   = 0.0
-        clip_label   = ""
-        iforest_score = 0.0
-
         if fc % YOLO_EVERY == 0:
-            yolo_dets = self._yolo_detections(frame_bgr)
+            self.last_yolo_dets = self._yolo_detections(frame_bgr)
+        yolo_dets = self.last_yolo_dets
 
         if fc % CLIP_EVERY == 0:
-            clip_score, clip_label = self._clip_score(frame_bgr)
+            self.last_clip_score, self.last_clip_label = self._clip_score(frame_bgr)
+        clip_score, clip_label = self.last_clip_score, self.last_clip_label
 
         if fc % IFOREST_EVERY == 0:
-            iforest_score = self._iforest_score(features)
+            self.last_iforest_score = self._iforest_score(features)
+        iforest_score = self.last_iforest_score
 
         # ── Combine scores into unified anomaly decision ──────────
         is_anomaly = False

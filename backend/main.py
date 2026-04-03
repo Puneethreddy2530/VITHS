@@ -118,49 +118,78 @@ async def startup():
 # ── Background camera processing loop ─────────────────────────────
 async def camera_loop():
     global latest_frame
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     if not cap.isOpened():
         print("[WARN] Webcam not found — using simulated events")
         await simulated_loop()
         return
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
 
     last_sleep_mode = None
+    loop = asyncio.get_event_loop()
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            await asyncio.sleep(0.03)
-            continue
-
-        if not event_gate.is_motion_event(frame):
-            if last_sleep_mode != True:
-                await broadcast_system_state(True)
-                last_sleep_mode = True
-            await asyncio.sleep(0.1)  # sleep 100ms instead of processing
-            continue
-
-        if last_sleep_mode != False:
-            await broadcast_system_state(False)
-            last_sleep_mode = False
-
+    def _process_frame(frame):
+        """Heavy ML work — runs in a thread so async loop stays free."""
         result = pipeline_instance.process(frame, zone_id=0)
-        latest_frame = pipeline_instance.annotate(frame.copy(), result)
-
+        annotated = pipeline_instance.annotate(frame.copy(), result)
+        enriched = None
+        reasoning = None
         if result["is_anomaly"]:
-            enriched  = memory_instance.process(frame, result)
+            enriched = memory_instance.process(frame, result)
             reasoning = reasoning_instance.analyze(
                 enriched,
                 enriched.get("similar_events", []),
                 enriched.get("recurrence", 0)
             )
-            event = build_event(enriched, reasoning)
-            incident_log.appendleft(event)
-            await broadcast(event)
+        return annotated, result, enriched, reasoning
 
-        await asyncio.sleep(0.03)   # ~30fps
+    processing_task = None
+    latest_result = None
+
+    while True:
+        ret, frame = await asyncio.to_thread(cap.read)
+        if not ret:
+            await asyncio.sleep(0.01)
+            continue
+
+        # Draw the last known ML results onto the immediate real-time frame
+        if latest_result:
+            latest_frame = pipeline_instance.annotate(frame.copy(), latest_result)
+        else:
+            latest_frame = frame
+
+        # If threadpool is busy, skip ML for this frame (prevent lag buildup)
+        if processing_task is None or processing_task.done():
+            # Grab results from the finished background task
+            if processing_task is not None:
+                try:
+                    annotated, res, enriched, reasoning = processing_task.result()
+                    latest_result = res
+                    if res["is_anomaly"] and enriched and reasoning:
+                        event = build_event(enriched, reasoning)
+                        incident_log.appendleft(event)
+                        # broadcast using async task to prevent blocking
+                        asyncio.create_task(broadcast(event))
+                except Exception as e:
+                    print(f"[ML Error] {e}")
+
+            # Sleep mode processing
+            if not event_gate.is_motion_event(frame):
+                if last_sleep_mode != True:
+                    await broadcast_system_state(True)
+                    last_sleep_mode = True
+                continue
+            
+            if last_sleep_mode != False:
+                await broadcast_system_state(False)
+                last_sleep_mode = False
+
+            # Fire and forget next heavy ML task in the background
+            processing_task = loop.run_in_executor(None, _process_frame, frame.copy())
+
+        await asyncio.sleep(0.01)
 
 
 async def simulated_loop():
@@ -458,11 +487,13 @@ async def video_generator():
         if latest_frame is None:
             await asyncio.sleep(0.1)
             continue
+        # Fast JPEG encoding (offloaded to thread to avoid blocking web server)
+        def _encode():
+            return cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        ret, buffer = await asyncio.to_thread(_encode)
         
-        # Fast JPEG encoding
-        ret, buffer = cv2.imencode('.jpg', latest_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if not ret:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
             continue
             
         frame_bytes = buffer.tobytes()

@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="PS-003 AI-powered intrusion monitoring system with quantum tracking, physics-based anomaly detection, and trajectory analysis" />
+  <meta name="description"
+    content="PS-003 AI-powered intrusion monitoring system with quantum tracking, physics-based anomaly detection, and trajectory analysis" />
   <title>PS-003 Intrusion Monitor</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
   <!-- ── HEADER ───────────────────────────────────────────────── -->
@@ -91,32 +94,70 @@
       <span class="on-air">● ON AIR</span>
     </div>
     <div class="video-wrap">
-      <img src="http://localhost:8031/video_feed" alt="Live security stream" />
+      <img src="http://localhost:8000/video_feed" alt="Live security stream" />
     </div>
   </div>
 
   <!-- ── MAIN GRID ─────────────────────────────────────────────── -->
   <div class="main-grid">
 
-    <!-- Heatmap -->
-    <div class="card">
+    <!-- Hostel SVG Heatmap -->
+    <div class="card svg-map-card">
       <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span>Hostel Block Heatmap (ST-GCN propagation)</span>
+        <span>Hostel Block Heatmap — Triangular Layout</span>
         <span id="quantum-state-badge" style="font-size:10px; color:#666;">ψ idle</span>
       </div>
-      <div class="heatmap-grid" id="heatmap-grid">
-        <!-- 16 zone cells injected by app.js -->
+      <div class="svg-map-container" id="svg-map-container">
+        <img src="hostel_bg.png" alt="" class="svg-map-bg" />
+        <svg id="hostel-svg" viewBox="0 0 1000 900" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="glow-red">
+              <feGaussianBlur stdDeviation="6" result="g" />
+              <feMerge>
+                <feMergeNode in="g" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="glow-purple">
+              <feGaussianBlur stdDeviation="4" result="g" />
+              <feMerge>
+                <feMergeNode in="g" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <!-- Building outline -->
+          <polygon class="building-wall" points="500,40 40,860 960,860" />
+          <polygon class="building-wall inner-wall" points="500,195 165,775 840,775" />
+          <polygon class="building-wall innermost-wall" points="500,345 290,690 710,690" />
+          <!-- Zone polygons injected by app.js -->
+          <g id="zone-polys"></g>
+          <!-- Trajectory path -->
+          <polyline id="traj-path" class="trajectory-line" points="" />
+          <!-- Camera icons -->
+          <g id="cam-icons"></g>
+          <!-- Zone labels -->
+          <g id="zone-labels"></g>
+        </svg>
+        <!-- Tooltip -->
+        <div class="map-tooltip" id="map-tooltip" style="display:none;">
+          <div class="tt-zone" id="tt-zone"></div>
+          <div class="tt-risk" id="tt-risk"></div>
+          <div class="tt-behavior" id="tt-behavior"></div>
+          <div class="tt-score" id="tt-score"></div>
+        </div>
       </div>
-      <div class="heatmap-legend">
+      <div class="heatmap-legend" style="margin-top:10px;">
         <span><span class="legend-swatch" style="background:#34d399"></span>LOW</span>
         <span><span class="legend-swatch" style="background:#f59e0b"></span>MEDIUM</span>
         <span><span class="legend-swatch" style="background:#ef4444"></span>HIGH</span>
+        <span style="margin-left:auto; font-size:9px; color:#555;">▲ = AQHSO Camera · ψ = Quantum probability</span>
       </div>
     </div>
 
     <!-- Latest alert card -->
     <div class="card">
-      <div class="card-title">Latest Alert — Gemini Analysis</div>
+      <div class="card-title">Latest Alert — AI Analysis</div>
       <div id="alert-card">
         <p class="alert-waiting">Waiting for events...</p>
       </div>
@@ -165,19 +206,25 @@
       <div class="panel-title">Trajectory Topology — Mule Detection</div>
       <div class="traj-row">
         <span class="traj-label">Path Entropy</span>
-        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-entropy-bar" style="width:0; background:#34d399"></div></div>
+        <div class="traj-bar-wrap">
+          <div class="traj-bar" id="traj-entropy-bar" style="width:0; background:#34d399"></div>
+        </div>
         <span class="traj-value" id="traj-entropy-val">—</span>
         <span class="traj-status" id="traj-entropy-status" style="background:#0e1e12; color:#34d399;">—</span>
       </div>
       <div class="traj-row">
         <span class="traj-label">Efficiency</span>
-        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-eff-bar" style="width:0; background:#34d399"></div></div>
+        <div class="traj-bar-wrap">
+          <div class="traj-bar" id="traj-eff-bar" style="width:0; background:#34d399"></div>
+        </div>
         <span class="traj-value" id="traj-eff-val">—</span>
         <span class="traj-status" id="traj-eff-status" style="background:#0e1e12; color:#34d399;">—</span>
       </div>
       <div class="traj-row">
         <span class="traj-label">Oscillations</span>
-        <div class="traj-bar-wrap"><div class="traj-bar" id="traj-osc-bar" style="width:0; background:#34d399"></div></div>
+        <div class="traj-bar-wrap">
+          <div class="traj-bar" id="traj-osc-bar" style="width:0; background:#34d399"></div>
+        </div>
         <span class="traj-value" id="traj-osc-val">—</span>
         <span class="traj-status" id="traj-osc-status" style="background:#0e1e12; color:#34d399;">—</span>
       </div>
@@ -193,10 +240,8 @@
   <div style="margin-top:16px;">
     <div class="panel">
       <div class="panel-title">Live Feed — physics overlay</div>
-      <img id="video-feed"
-           src="http://localhost:8031/video_feed"
-           style="width:100%; border-radius:8px; display:block;"
-           onerror="this.style.opacity='0.3'; this.alt='No camera'"/>
+      <img id="video-feed" src="http://localhost:8000/video_feed" style="width:100%; border-radius:8px; display:block;"
+        onerror="this.style.opacity='0.3'; this.alt='No camera'" />
       <div style="font-size:10px; color:#444; margin-top:6px;">
         Divergence · Curl · Lyapunov · No facial recognition
       </div>
@@ -225,4 +270,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>
