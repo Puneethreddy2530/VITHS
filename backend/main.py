@@ -232,9 +232,9 @@ app.add_middleware(CORSMiddleware,
 async def camera_loop():
     global latest_frame, raw_frame, camera_healthy
     
-    # Wait for camera thread to wake up
+    # Wait for camera thread to wake up (30s max — PowerShell enum can take 8s+)
     wait_ticks = 0
-    while raw_frame is None and camera_healthy and wait_ticks < 50:
+    while raw_frame is None and camera_healthy and wait_ticks < 300:
         await asyncio.sleep(0.1)
         wait_ticks += 1
 

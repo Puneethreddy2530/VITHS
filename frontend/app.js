@@ -421,6 +421,14 @@ function spawnRipple(zoneId) {
 
 let _twInterval = null;
 
+/* ── Alert card dismiss logic ──────────────────────────────── */
+window.dismissAlert = function() {
+  document.body.classList.remove('alert-mode');
+  const alertWrap = document.getElementById('alert-card')?.parentElement;
+  if (alertWrap) alertWrap.classList.remove('alert-critical');
+  if (_twInterval) clearInterval(_twInterval);
+};
+
 /* ── Alert card renderer — split layout ──────────────────── */
 function renderAlertCard(evt) {
   const r     = evt.reasoning || {};
@@ -495,6 +503,7 @@ function renderAlertCard(evt) {
           <span class="risk-pill" style="background:${color}">${esc(risk)}</span>
           <span class="alert-zone-tag">Zone ${esc(evt.zone_id)}</span>
           <span class="alert-time-tag">${esc(ts)}</span>
+          <button onclick="dismissAlert()" style="margin-left:auto; padding:4px 10px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">Dismiss</button>
         </div>
         ${summaryHtml}
         ${patHtml}
