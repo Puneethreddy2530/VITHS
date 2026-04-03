@@ -230,11 +230,12 @@ body {
 }
 .zone-poly.risk-HIGH {
   filter: url(#glow-red);
-  animation: zone-alert-pulse 2s ease-in-out infinite;
+  animation: pulse 1.2s infinite;
 }
-@keyframes zone-alert-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+@keyframes pulse {
+  0% { stroke-width: 1; }
+  50% { stroke-width: 6; }
+  100% { stroke-width: 1; }
 }
 .zone-poly.quantum-diffusing {
   filter: url(#glow-purple);
@@ -605,3 +606,58 @@ body {
   background: #444; transition: background 0.5s; flex-shrink: 0;
 }
 #system-label { color: #555; font-size: 10px; }
+
+/* ── Overlay Alert Mode Blur ───────────────────────────────────── */
+body { transition: background 0.5s; }
+body.alert-mode { background: #050000; }
+body.alert-mode > *:not(.main-grid) {
+  filter: blur(2px) brightness(0.6);
+  transition: filter 0.5s ease;
+}
+
+/* ── Ripple Animation ─────────────────────────────────────────── */
+.ripple-circle {
+  fill: none;
+  stroke: rgba(239, 68, 68, 0.8);
+  stroke-width: 2;
+  animation: ripple-spread 1.5s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes ripple-spread {
+  0% { r: 0; opacity: 1; }
+  100% { r: 150px; opacity: 0; stroke-width: 0; }
+}
+
+/* ── DOMINANT ALERT POPUP (HIGH/CRITICAL) ─────────────── */
+.alert-critical {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) scale(1.05) !important;
+  width: 70vw !important;
+  max-width: 900px !important;
+  z-index: 10000;
+  box-shadow: 0 0 40px rgba(239,68,68,0.5) !important;
+  border: 1px solid rgba(239,68,68,0.8) !important;
+  background: rgba(10,10,15,0.95) !important;
+  backdrop-filter: blur(16px);
+  animation: popInAlert 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes popInAlert {
+  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+}
+
+.typewriter-text {
+  font-family: 'Inter', monospace;
+  color: #fca5a5;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  min-height: 85px;
+  border-left: 3px solid #ef4444;
+  padding-left: 14px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(239,68,68,0.4);
+}

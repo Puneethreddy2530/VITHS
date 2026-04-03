@@ -403,6 +403,24 @@ function updatePhysics(evt) {
   }
 }
 
+/* ── Visual Ripple Effect ───────────────────────────────────── */
+function spawnRipple(zoneId) {
+  const def = ZONE_DEFS.find(z => z.id === zoneId);
+  if (!def) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const circle = document.createElementNS(NS, 'circle');
+  circle.setAttribute('cx', def.cx);
+  circle.setAttribute('cy', def.cy);
+  circle.setAttribute('class', 'ripple-circle');
+  const svg = document.getElementById('hostel-svg');
+  if (svg) {
+    svg.appendChild(circle);
+    setTimeout(() => circle.remove(), 1500);
+  }
+}
+
+let _twInterval = null;
+
 /* ── Alert card renderer — split layout ──────────────────── */
 function renderAlertCard(evt) {
   const r     = evt.reasoning || {};
@@ -410,6 +428,27 @@ function renderAlertCard(evt) {
   const color = RISK_COLOR[risk] || RISK_COLOR.LOW;
   const ts    = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '';
   const traj  = evt.trajectory || {};
+
+  const alertWrap = document.getElementById('alert-card').parentElement;
+
+  // Insane visual triggers
+  if (risk === 'HIGH' || risk === 'CRITICAL') {
+    document.body.classList.add('alert-mode');
+    alertWrap.classList.add('alert-critical');
+    spawnRipple(evt.zone_id);
+  } else {
+    document.body.classList.remove('alert-mode');
+    alertWrap.classList.remove('alert-critical');
+  }
+
+  if (_twInterval) clearInterval(_twInterval);
+
+  let summaryHtml = '';
+  if (risk === 'HIGH' || risk === 'CRITICAL') {
+    summaryHtml = `<div class="typewriter-text" id="tw-target"></div>`;
+  } else {
+    summaryHtml = `<p class="alert-summary">${esc(r.pattern_summary || evt.behavior_label || '')}</p>`;
+  }
 
   let whyHtml = '';
   if (Array.isArray(r.why_flagged) && r.why_flagged.length) {
@@ -457,7 +496,7 @@ function renderAlertCard(evt) {
           <span class="alert-zone-tag">Zone ${esc(evt.zone_id)}</span>
           <span class="alert-time-tag">${esc(ts)}</span>
         </div>
-        <p class="alert-summary">${esc(r.pattern_summary || evt.behavior_label || '')}</p>
+        ${summaryHtml}
         ${patHtml}
         ${whyHtml}
         ${predHtml}
@@ -472,6 +511,20 @@ function renderAlertCard(evt) {
       </div>
     </div>
   `;
+
+  if (risk === 'HIGH' || risk === 'CRITICAL') {
+    const tw = document.getElementById('tw-target');
+    const zoneStr = ZONE_DEFS.find(z => z.id === evt.zone_id)?.label || `Z${evt.zone_id}`;
+    const bStr = evt.behavior_label || evt.behavior || '';
+    const txt = `⚠ Intrusion detected...\n→ Zone ${zoneStr}\n→ Behavior: ${bStr.replace(/_/g, ' ')}\n→ Risk: ${risk}`;
+    let i = 0;
+    _twInterval = setInterval(() => {
+      if (!tw) { clearInterval(_twInterval); return; }
+      tw.textContent += txt[i];
+      i++;
+      if (i >= txt.length) clearInterval(_twInterval);
+    }, 35);
+  }
 }
 
 /* ── Event feed row ─────────────────────────────────────────── */
@@ -605,7 +658,7 @@ function handleSystemReset() {
     const poly = document.getElementById('zpoly-' + i);
     const risk = document.getElementById('zlbl-' + i);
     const psi  = document.getElementById('zpsi-' + i);
-    if (poly) { 
+    if (poly) {
       poly.style.fill = 'rgba(52,211,153,0.08)'; 
       poly.style.stroke = 'rgba(52,211,153,0.15)';
       poly.classList.remove('risk-HIGH', 'quantum-diffusing');
@@ -614,6 +667,9 @@ function handleSystemReset() {
     if (psi)  { psi.textContent = ''; }
     _zoneState[i] = { score:0, risk:'LOW', behavior:'', psi:0 };
   }
+  document.body.classList.remove('alert-mode');
+  const alertWrap = document.getElementById('alert-card')?.parentElement;
+  if(alertWrap) alertWrap.classList.remove('alert-critical');
   _zoneBehaviors = {};
   
   // Clear trajectory path
