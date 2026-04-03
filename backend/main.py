@@ -78,61 +78,101 @@ def speak_alert(zone_id: int, risk: str, behavior: str):
     if _TTS_AVAILABLE:
         tts_queue.put(msg)
 
+# ── Camera device name enumeration (Windows only) ─────────────────
+def _get_camera_priority_indices():
+    """
+    Uses PowerShell to list camera friendly names in Windows device order.
+    Returns indices sorted so physical (non-virtual) cameras come first.
+    """
+    import subprocess
+    VIRTUAL_KEYWORDS = ['nothing', 'phone', 'virtual', 'link', 'obs',
+                        'droid', 'iphone', 'android', 'snap', 'xsplit',
+                        'manycam', 'ndi', 'droidcam', 'iriun', 'epoccam']
+    try:
+        r = subprocess.run(
+            ['powershell', '-NoProfile', '-Command',
+             "Get-PnpDevice -Class Camera | "
+             "Where-Object {$_.Status -eq 'OK'} | "
+             "Select-Object -ExpandProperty FriendlyName"],
+            capture_output=True, text=True, timeout=8
+        )
+        names = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
+        print(f"[CAMERA] Windows camera devices: {names}")
+
+        physical, virtual = [], []
+        for idx, name in enumerate(names):
+            low = name.lower()
+            if any(kw in low for kw in VIRTUAL_KEYWORDS):
+                virtual.append((idx, name))
+            else:
+                physical.append((idx, name))
+
+        # Physical cameras first, then virtual as last-resort fallback
+        ordered = physical + virtual
+        # Also append extra indices in case PowerShell missed one
+        seen = {i for i, _ in ordered}
+        for i in range(max(len(names) + 1, 4)):
+            if i not in seen:
+                ordered.append((i, f"Unknown@{i}"))
+        return ordered
+    except Exception as e:
+        print(f"[CAMERA] PowerShell enum failed ({e}), trying indices 0-3")
+        return [(i, f"Camera@{i}") for i in range(4)]
+
+
 # ── Dedicated Camera Capture Thread ──────────────────────────────
 def capture_thread_fn():
     global raw_frame, camera_healthy
     cap = None
-    print("\n[CAMERA] Initiating aggressive hardware scan to bypass virtual cameras...")
-    
-    # Test DirectShow (DSHOW) first to bypass Windows virtual phone cameras, then MSMF
-    backends = [("DSHOW", cv2.CAP_DSHOW), ("MSMF", cv2.CAP_MSMF), ("ANY", cv2.CAP_ANY)]
-    
-    for backend_name, backend_flag in backends:
-        if cap is not None: 
-            break
-        for i in range(4): # Check indices 0, 1, 2, 3
-            print(f"  Testing index {i} using {backend_name}...")
-            temp_cap = cv2.VideoCapture(i, backend_flag)
-            
-            # Force resolution to prevent DSHOW resolution-negotiation crashes
-            temp_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            temp_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
-            if temp_cap.isOpened():
-                success = False
-                # Read multiple times: virtual cameras often fail on read() or return pitch black frames
-                for _ in range(10):
-                    ret, fr = temp_cap.read()
-                    if ret and fr is not None:
-                        # Ensure the frame isn't completely pitch black (a trick virtual cameras use)
-                        if np.sum(fr) > 0: 
-                            success = True
-                            break
-                    time.sleep(0.05)
-                    
-                if success:
-                    cap = temp_cap
-                    print(f"\n[CAMERA] 🟢 SUCCESS! Physical camera locked at index {i} using {backend_name}\n")
-                    break
-                else:
-                    print(f"    ❌ Opened, but stream is dead/locked (likely the Nothing Phone).")
+    print("\n[CAMERA] Enumerating devices to skip virtual/phone cameras...")
+
+    priority = _get_camera_priority_indices()
+
+    for cam_idx, cam_name in priority:
+        print(f"  Trying index {cam_idx} — '{cam_name}' (DirectShow, native res)...")
+        temp_cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
+
+        if not temp_cap.isOpened():
+            print(f"    Could not open.")
             temp_cap.release()
+            continue
+
+        success = False
+        for _ in range(15):
+            ret, fr = temp_cap.read()
+            if ret and fr is not None and np.sum(fr) > 0:
+                success = True
+                break
+            time.sleep(0.05)
+
+        if success:
+            cap = temp_cap
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            print(f"\n[CAMERA] SUCCESS — '{cam_name}' at index {cam_idx} ({w}x{h})\n")
+            break
+        else:
+            print(f"    Opened but stream is dead/black — skipping.")
+        temp_cap.release()
 
     if cap is None:
-        print("\n[WARN] 🔴 ALL PHYSICAL CAMERAS FAILED. Falling back to simulation.")
+        print("\n[WARN] ALL CAMERAS FAILED. Falling back to simulation.")
         camera_healthy = False
         return
 
-    # Keep reading frames safely in the background
+    consecutive_failures = 0
     while True:
         ret, frame = cap.read()
         if ret and frame is not None:
             raw_frame = frame
+            consecutive_failures = 0
         else:
-            print("[WARN] Camera feed died during operation.")
-            camera_healthy = False
-            break
-        time.sleep(0.03) # ~30fps lock to save CPU
+            consecutive_failures += 1
+            if consecutive_failures > 30:
+                print("[WARN] Camera feed died during operation.")
+                camera_healthy = False
+                break
+        time.sleep(0.03)  # ~30fps
 
 # ── Neuromorphic Event Gate ─────────────────────────────────────────
 class NeuromorphicGate:
