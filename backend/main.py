@@ -82,41 +82,57 @@ def speak_alert(zone_id: int, risk: str, behavior: str):
 def capture_thread_fn():
     global raw_frame, camera_healthy
     cap = None
-    print("\n[CAMERA] Scanning for working physical cameras...")
+    print("\n[CAMERA] Initiating aggressive hardware scan to bypass virtual cameras...")
     
-    # Auto-scan to bypass the locked Nothing Phone
-    for i in [0, 1, 2]:
-        print(f"  Testing index {i}...")
-        temp_cap = cv2.VideoCapture(i)
-        if temp_cap.isOpened():
-            # MUST read frames to confirm it's not a frozen virtual camera
-            success = False
-            for _ in range(5):
-                ret, fr = temp_cap.read()
-                if ret and fr is not None:
-                    success = True
+    # Test DirectShow (DSHOW) first to bypass Windows virtual phone cameras, then MSMF
+    backends = [("DSHOW", cv2.CAP_DSHOW), ("MSMF", cv2.CAP_MSMF), ("ANY", cv2.CAP_ANY)]
+    
+    for backend_name, backend_flag in backends:
+        if cap is not None: 
+            break
+        for i in range(4): # Check indices 0, 1, 2, 3
+            print(f"  Testing index {i} using {backend_name}...")
+            temp_cap = cv2.VideoCapture(i, backend_flag)
+            
+            # Force resolution to prevent DSHOW resolution-negotiation crashes
+            temp_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            temp_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            
+            if temp_cap.isOpened():
+                success = False
+                # Read multiple times: virtual cameras often fail on read() or return pitch black frames
+                for _ in range(10):
+                    ret, fr = temp_cap.read()
+                    if ret and fr is not None:
+                        # Ensure the frame isn't completely pitch black (a trick virtual cameras use)
+                        if np.sum(fr) > 0: 
+                            success = True
+                            break
+                    time.sleep(0.05)
+                    
+                if success:
+                    cap = temp_cap
+                    print(f"\n[CAMERA] 🟢 SUCCESS! Physical camera locked at index {i} using {backend_name}\n")
                     break
-            if success:
-                cap = temp_cap
-                print(f"[CAMERA] SUCCESS: Physical camera locked at index {i}")
-                break
-        temp_cap.release()
+                else:
+                    print(f"    ❌ Opened, but stream is dead/locked (likely the Nothing Phone).")
+            temp_cap.release()
 
     if cap is None:
-        print("[WARN] No working physical camera found.")
+        print("\n[WARN] 🔴 ALL PHYSICAL CAMERAS FAILED. Falling back to simulation.")
         camera_healthy = False
         return
 
     # Keep reading frames safely in the background
     while True:
         ret, frame = cap.read()
-        if ret:
+        if ret and frame is not None:
             raw_frame = frame
         else:
-            print("[WARN] Camera feed died.")
+            print("[WARN] Camera feed died during operation.")
             camera_healthy = False
             break
-        time.sleep(0.01)
+        time.sleep(0.03) # ~30fps lock to save CPU
 
 # ── Neuromorphic Event Gate ─────────────────────────────────────────
 class NeuromorphicGate:
