@@ -170,6 +170,9 @@ function updateQuantum(quantum) {
   // handled by updateQuantumOverlay for SVG
 }
 
+// Track timeouts per zone safely
+const QUANTUM_TIMEOUTS = {};
+
 function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
   if (!quantumField) return;
   quantumField.forEach(({ zone_id, probability }) => {
@@ -181,12 +184,26 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
 
     if (probability > 0.05) {
       if (ptxt) ptxt.textContent = `ψ ${probability.toFixed(2)}`;
+      
       if (quantumState === 'diffusing') {
         poly.classList.add('quantum-diffusing');
-        // Also pulse neighbors
+        
+        // Use a zone-specific timeout rather than a global blanket wipe
+        clearTimeout(QUANTUM_TIMEOUTS[zone_id]);
+        QUANTUM_TIMEOUTS[zone_id] = setTimeout(() => {
+           poly.classList.remove('quantum-diffusing');
+        }, 3000);
+
+        // Also pulse neighbors safely
         for (const nbr of (ZONE_ADJ[zone_id] || [])) {
           const np = document.getElementById('zpoly-' + nbr);
-          if (np && probability > 0.15) np.classList.add('quantum-diffusing');
+          if (np && probability > 0.15) {
+            np.classList.add('quantum-diffusing');
+            clearTimeout(QUANTUM_TIMEOUTS[nbr]);
+            QUANTUM_TIMEOUTS[nbr] = setTimeout(() => {
+                np.classList.remove('quantum-diffusing');
+            }, 3000);
+          }
         }
       }
     } else {
@@ -195,12 +212,7 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
     }
   });
 
-  // Clear diffusing after a delay
-  setTimeout(() => {
-    document.querySelectorAll('.quantum-diffusing').forEach(el => {
-      el.classList.remove('quantum-diffusing');
-    });
-  }, 3000);
+  // Note: The global setTimeout block that was here previously has been completely removed.
 
   const badge = document.getElementById('quantum-state-badge');
   if (badge) {
@@ -429,10 +441,27 @@ window.dismissAlert = function() {
   if (_twInterval) clearInterval(_twInterval);
 };
 
+let _lastAlertRender = 0;
+let _currentAlertSignature = '';
+
 /* ── Alert card renderer — split layout ──────────────────── */
 function renderAlertCard(evt) {
   const r     = evt.reasoning || {};
   const risk  = r.risk_level || evt.risk_tier || 'LOW';
+  
+  // Create a unique signature for this specific ongoing event
+  const sig = `${evt.zone_id}-${risk}-${evt.behavior}`;
+  const now = Date.now();
+
+  // If the same alert is firing, only allow a full DOM re-render every 2.5 seconds
+  // This prevents the typewriter effect from restarting 30 times a second.
+  if (sig === _currentAlertSignature && now - _lastAlertRender < 2500) {
+    return;
+  }
+  
+  _lastAlertRender = now;
+  _currentAlertSignature = sig;
+
   const color = RISK_COLOR[risk] || RISK_COLOR.LOW;
   const ts    = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '';
   const traj  = evt.trajectory || {};
@@ -540,7 +569,20 @@ function renderAlertCard(evt) {
 let _feedCount = 0;
 const MAX_FEED = 100;
 
+let _lastFeedSignature = '';
+let _lastFeedTime = 0;
+
 function addEventRow(evt) {
+  const sig = `${evt.zone_id}-${evt.behavior}`;
+  const now = Date.now();
+  
+  // Debounce identical feed events to maximum 1 per second
+  if (sig === _lastFeedSignature && now - _lastFeedTime < 1000) {
+      return; 
+  }
+  _lastFeedSignature = sig;
+  _lastFeedTime = now;
+
   const placeholder = document.getElementById('feed-empty');
   if (placeholder) placeholder.remove();
 

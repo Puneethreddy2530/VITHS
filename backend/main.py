@@ -263,6 +263,8 @@ async def camera_loop():
     processing_task = None
     latest_result = None
 
+    last_alert_time = 0
+
     while camera_healthy:
         # Pull the frame cleanly from the background thread
         frame = raw_frame.copy() if raw_frame is not None else None
@@ -281,9 +283,11 @@ async def camera_loop():
                     annotated, res, enriched, reasoning = processing_task.result()
                     latest_result = res
                     if res["is_anomaly"] and enriched and reasoning:
-                        event = build_event(enriched, reasoning)
-                        incident_log.appendleft(event)
-                        asyncio.create_task(broadcast(event))
+                        if time.time() - last_alert_time > 1.0:
+                            last_alert_time = time.time()
+                            event = build_event(enriched, reasoning)
+                            incident_log.appendleft(event)
+                            asyncio.create_task(broadcast(event))
                 except Exception as e:
                     print(f"[ML Error] {e}")
 
