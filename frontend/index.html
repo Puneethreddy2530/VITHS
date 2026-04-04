@@ -97,14 +97,44 @@
     </div>
   </div>
 
-  <!-- ── LIVE CAMERA FEED ───────────────────────────────────────── -->
-  <div class="card">
+  <!-- ── COMMAND CENTER 2×2 CCTV MATRIX ───────────────────────── -->
+  <div class="card" style="padding: 12px;">
     <div class="video-header">
-      <span class="card-title" style="margin:0">Live Camera Feed (Annotated)</span>
-      <span class="on-air">● ON AIR</span>
+      <span class="card-title" style="margin:0">Command Center Multi-Feed Matrix</span>
+      <span class="on-air">● SYSTEM ACTIVE</span>
     </div>
-    <div class="video-wrap">
-      <img src="/video_feed" alt="Live security stream" onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
+    <div class="cctv-matrix">
+      <div class="cctv-feed" id="cctv-0">
+        <div class="cctv-overlay">
+          <span class="cctv-label">CAM 01 // ZONE B1 (LIVE ML)</span>
+          <span class="cctv-status">OK</span>
+        </div>
+        <img src="/video_feed" alt="Live Stream" onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+      </div>
+
+      <div class="cctv-feed" id="cctv-4">
+        <div class="cctv-overlay">
+          <span class="cctv-label">CAM 02 // ZONE B5</span>
+          <span class="cctv-status">OK</span>
+        </div>
+        <video src="https://assets.mixkit.co/videos/preview/mixkit-empty-corridor-in-a-building-4164-large.mp4" autoplay loop muted playsinline></video>
+      </div>
+
+      <div class="cctv-feed" id="cctv-15">
+        <div class="cctv-overlay">
+          <span class="cctv-label">CAM 03 // MAIN GATE</span>
+          <span class="cctv-status">OK</span>
+        </div>
+        <video src="https://assets.mixkit.co/videos/preview/mixkit-security-camera-view-of-a-parking-lot-4166-large.mp4" autoplay loop muted playsinline></video>
+      </div>
+
+      <div class="cctv-feed" id="cctv-7">
+        <div class="cctv-overlay">
+          <span class="cctv-label">CAM 04 // ZONE B8</span>
+          <span class="cctv-status">OK</span>
+        </div>
+        <video src="https://assets.mixkit.co/videos/preview/mixkit-walking-through-a-dark-underground-parking-lot-4165-large.mp4" autoplay loop muted playsinline></video>
+      </div>
     </div>
   </div>
 

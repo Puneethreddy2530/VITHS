@@ -875,3 +875,67 @@ body.alert-mode > *:not(.main-grid) {
   from { background: rgba(239, 68, 68, 0.15); box-shadow: inset 0 0 0px #ef4444; }
   to { background: rgba(239, 68, 68, 0.4); box-shadow: inset 0 0 10px #ef4444; }
 }
+
+/* ── CCTV Matrix ────────────────────────────────────────────── */
+.cctv-matrix {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 8px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 4px;
+}
+.cctv-feed {
+  position: relative;
+  background: #08080d;
+  border: 1px solid #1e1e2a;
+  border-radius: 6px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.cctv-feed img, .cctv-feed video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: grayscale(40%) contrast(1.1);
+}
+.cctv-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+  z-index: 10;
+  pointer-events: none;
+}
+.cctv-label {
+  color: #fff;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.cctv-status {
+  color: #34d399;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.cctv-feed.threat-active {
+  border: 2px solid #ef4444;
+  box-shadow: inset 0 0 20px rgba(239,68,68,0.5);
+  animation: cctv-flash 1s infinite alternate;
+}
+.cctv-feed.threat-active .cctv-status {
+  color: #ef4444;
+}
+@keyframes cctv-flash {
+  from { box-shadow: inset 0 0 10px rgba(239,68,68,0.3); }
+  to { box-shadow: inset 0 0 40px rgba(239,68,68,0.8); }
+}

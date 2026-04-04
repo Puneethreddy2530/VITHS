@@ -115,6 +115,35 @@ const ZONE_ADJ = {
   8:[7, 9], 9:[8, 10], 10:[9, 11], 11:[10, 12], 12:[11, 13], 13:[12, 14], 14:[13, 15], 15:[14, 0]
 };
 
+/* Zone index → CCTV tile id (index.html); ids are legacy labels, not zone numbers */
+const CCTV_TILE_ID_BY_ZONE = { 1: 'cctv-0', 5: 'cctv-4', 0: 'cctv-15', 8: 'cctv-7' };
+
+function resetCctvMatrixFeeds() {
+  document.querySelectorAll('.cctv-feed').forEach((feed) => {
+    feed.classList.remove('threat-active');
+    const statusEl = feed.querySelector('.cctv-status');
+    if (statusEl) statusEl.textContent = 'OK';
+  });
+}
+
+function syncCctvMatrixThreat(evt, risk) {
+  const pz = parseFloorZone(evt.zone_id);
+  if (pz.floor !== currentFloor) return;
+
+  resetCctvMatrixFeeds();
+
+  if (risk !== 'HIGH' && risk !== 'CRITICAL') return;
+  if (pz.localZone == null) return;
+
+  const tileId = CCTV_TILE_ID_BY_ZONE[pz.localZone];
+  const targetCam = tileId ? document.getElementById(tileId) : null;
+  if (targetCam) {
+    targetCam.classList.add('threat-active');
+    const statusEl = targetCam.querySelector('.cctv-status');
+    if (statusEl) statusEl.textContent = 'THREAT DETECTED';
+  }
+}
+
 /* ── Zone runtime state ───────────────────────────────────── */
 const _zoneState = {};
 for (const z of ZONE_DEFS) _zoneState[z.id] = { score:0, risk:'LOW', behavior:'', psi:0 };
@@ -705,6 +734,7 @@ let _currentAlertSignature = '';
 function renderAlertCard(evt) {
   const r     = evt.reasoning || {};
   const risk  = r.risk_level || evt.risk_tier || 'LOW';
+  syncCctvMatrixThreat(evt, risk);
   const pz    = parseFloorZone(evt.zone_id);
 
   if (pz.floor !== currentFloor || pz.localZone == null) {
@@ -1015,6 +1045,7 @@ function handleSystemReset() {
   });
   const lp = document.getElementById('traj-label-pill');
   if (lp) { lp.textContent = 'Normal path'; lp.style.background = '#0e1e12'; lp.style.color = '#34d399'; }
+  resetCctvMatrixFeeds();
   renderPixelHeatmap();
 }
 
@@ -1145,6 +1176,12 @@ function buildFloorSelector() {
       if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 
       resetPerFloorZoneOverlays();
+      resetCctvMatrixFeeds();
+      if (_latestEvent) {
+        const lr = _latestEvent.reasoning || {};
+        const lrisk = lr.risk_level || _latestEvent.risk_tier || 'LOW';
+        syncCctvMatrixThreat(_latestEvent, lrisk);
+      }
       if (_latestEvent && Array.isArray(_latestEvent.heatmap)) updateHeatmap(_latestEvent.heatmap);
       if (_latestEvent && Array.isArray(_latestEvent.quantum_field)) {
         updateQuantumOverlay(
