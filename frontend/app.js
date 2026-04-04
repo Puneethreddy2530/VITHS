@@ -1200,10 +1200,53 @@ function buildFloorSelector() {
   if (title) title.textContent = `PS-003 INTRUSION MONITOR // LEVEL ${currentFloor}`;
 }
 
+function getCctvDemoVideos() {
+  const root = document.getElementById('cctv-matrix-root');
+  if (!root) return [];
+  return Array.from(root.querySelectorAll('video.cctv-demo-video'));
+}
+
+/** Pause / Play toggle + seek-to-start for the three local demo CCTV clips (CAM 02–04). */
+function wireCctvDemoControls() {
+  const btnPause = document.getElementById('cctv-demo-pause');
+  const btnReset = document.getElementById('cctv-demo-reset');
+  if (!btnPause || !btnReset) return;
+
+  let demoPaused = false;
+
+  const syncPauseLabel = () => {
+    btnPause.textContent = demoPaused ? 'Play' : 'Pause';
+  };
+
+  btnPause.addEventListener('click', () => {
+    const vids = getCctvDemoVideos();
+    demoPaused = !demoPaused;
+    vids.forEach((v) => {
+      if (demoPaused) v.pause();
+      else v.play().catch(() => {});
+    });
+    syncPauseLabel();
+  });
+
+  btnReset.addEventListener('click', () => {
+    const vids = getCctvDemoVideos();
+    vids.forEach((v) => {
+      try {
+        v.pause();
+        v.currentTime = 0;
+      } catch (e) { /* ignore */ }
+      if (!demoPaused) v.play().catch(() => {});
+    });
+  });
+
+  syncPauseLabel();
+}
+
 function initApp() {
   applyInitialFloorFromQuery();
   buildFloorSelector();
   wireTvDisplayConnections();
+  wireCctvDemoControls();
   loadInitialData();
   connect();
   setInterval(pollStats, 3000);

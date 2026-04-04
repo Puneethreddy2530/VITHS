@@ -877,6 +877,59 @@ body.alert-mode > *:not(.main-grid) {
 }
 
 /* ── CCTV Matrix ────────────────────────────────────────────── */
+.cctv-matrix-card-head {
+  margin-bottom: 10px;
+}
+.cctv-matrix-card-head .video-header {
+  margin-bottom: 8px;
+}
+.cctv-demo-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #0d0d14;
+  border: 1px solid #1e1e2a;
+  border-radius: 8px;
+}
+.cctv-demo-hint {
+  font-size: 10px;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+}
+.cctv-demo-actions {
+  display: flex;
+  gap: 8px;
+}
+.cctv-demo-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.cctv-demo-btn:hover {
+  background: rgba(52, 211, 153, 0.22);
+  color: #a7f3d0;
+}
+.cctv-demo-btn-secondary {
+  border-color: #4b5563;
+  background: rgba(75, 85, 99, 0.2);
+  color: #d1d5db;
+}
+.cctv-demo-btn-secondary:hover {
+  border-color: #6b7280;
+  background: rgba(107, 114, 128, 0.25);
+  color: #f3f4f6;
+}
+
 .cctv-matrix {
   display: grid;
   grid-template-columns: 1fr 1fr;
