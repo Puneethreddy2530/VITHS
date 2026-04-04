@@ -769,6 +769,10 @@ async def websocket_endpoint(websocket: WebSocket):
             connected_ws.remove(websocket)
 
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+static_path = os.path.join(frontend_path, "static")
+# Mount CCTV assets first so /static/*.mp4 is always served (not swallowed by SPA root)
+if os.path.isdir(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="cctv_static")
 if os.path.isdir(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
