@@ -418,11 +418,62 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
   renderPixelHeatmap();
 }
 
+/* ── AQHSO placement panel (from /aqhso/placements + optimal_placements.json) ─ */
+function renderAqhsoInsights(data) {
+  const statusEl = document.getElementById('aqhso-placement-status');
+  const listEl   = document.getElementById('aqhso-cam-list');
+  const gridEl   = document.getElementById('aqhso-grid-meta');
+  if (!statusEl) return;
+
+  if (!data) {
+    statusEl.innerHTML = '<span class="aqhso-warn">Could not load <code>/aqhso/placements</code> (network or server).</span>';
+    if (listEl) listEl.innerHTML = '';
+    if (gridEl) gridEl.textContent = '';
+    return;
+  }
+  if (data.error) {
+    statusEl.innerHTML = `<span class="aqhso-warn">${esc(data.error)} — run <code>python scripts/aqhso_grid.py</code> from the project root to generate <code>outputs/optimal_placements.json</code>.</span>`;
+    if (listEl) listEl.innerHTML = '';
+    if (gridEl) gridEl.textContent = '';
+    return;
+  }
+
+  const ba = data.block_assignments;
+  if (!Array.isArray(ba) || ba.length === 0) {
+    statusEl.textContent = 'Placement file loaded but no cameras listed.';
+    if (listEl) listEl.innerHTML = '';
+    if (gridEl) gridEl.textContent = '';
+    return;
+  }
+
+  const err = data.coverage_error_m != null ? Number(data.coverage_error_m).toFixed(3) : '—';
+  const g = data.grid || {};
+  const gw = g.width ?? '—';
+  const gh = g.height ?? '—';
+  const bm = g.block_size_m ?? '—';
+  statusEl.textContent = `${ba.length} optimal cameras loaded · planning metric (coverage error) = ${err} m`;
+  if (gridEl) {
+    gridEl.textContent = `Planner grid: ${gw}×${gh} blocks × ${bm} m/block (same zone IDs 0–15 as this map; ▲ marks AQHSO picks).`;
+  }
+  if (listEl) {
+    listEl.innerHTML = ba.map((b) => {
+      const def = ZONE_DEFS.find(z => z.id === b.zone_id);
+      const label = def ? def.label : `Zone ${b.zone_id}`;
+      const cid = (b.cam_id != null ? b.cam_id : 0) + 1;
+      const xm = b.x_m != null ? Number(b.x_m).toFixed(1) : '—';
+      const ym = b.y_m != null ? Number(b.y_m).toFixed(1) : '—';
+      return `<li><strong>Camera ${cid}</strong> → <strong>${esc(label)}</strong> <span class="muted">(zone id ${b.zone_id} · ${xm} m, ${ym} m)</span></li>`;
+    }).join('');
+  }
+}
+
 /* ── Camera placement ▲ markers on SVG ─────────────────────── */
 function applyPlacements(data) {
-  if (!data || !Array.isArray(data.block_assignments)) return;
+  renderAqhsoInsights(data);
   const NS = 'http://www.w3.org/2000/svg';
   const camG = document.getElementById('cam-icons');
+  if (camG) camG.innerHTML = '';
+  if (!data || !Array.isArray(data.block_assignments)) return;
   if (!camG) return;
   _placements = {};
   for (const b of data.block_assignments) {
@@ -469,6 +520,12 @@ function showTooltip(e, zoneDef) {
   document.getElementById('tt-risk').style.color = RISK_COLOR[st.risk] || '#34d399';
   document.getElementById('tt-behavior').textContent = st.behavior ? `Behavior: ${st.behavior}` : '';
   document.getElementById('tt-score').textContent = `Score: ${(st.score || 0).toFixed(3)}${st.psi > 0.01 ? ` · ψ ${st.psi.toFixed(2)}` : ''}`;
+  const aqh = document.getElementById('tt-aqhso');
+  if (aqh) {
+    aqh.textContent = _placements[zoneDef.id]
+      ? '▲ AQHSO optimal camera — this zone is in the placement plan'
+      : '';
+  }
   tt.style.display = 'block';
   moveTooltip(e);
 }
@@ -1138,7 +1195,7 @@ function loadInitialData() {
   fetch(API_BASE + '/aqhso/placements')
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(applyPlacements)
-    .catch(() => {});
+    .catch(() => { renderAqhsoInsights(null); });
 
   pollStats();
 }

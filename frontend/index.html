@@ -170,14 +170,31 @@
           <div class="tt-risk" id="tt-risk"></div>
           <div class="tt-behavior" id="tt-behavior"></div>
           <div class="tt-score" id="tt-score"></div>
+          <div class="tt-aqhso" id="tt-aqhso"></div>
         </div>
       </div>
       <div class="heatmap-legend" style="margin-top:10px;">
         <span><span class="legend-swatch" style="background:#34d399"></span>LOW</span>
         <span><span class="legend-swatch" style="background:#f59e0b"></span>MEDIUM</span>
         <span><span class="legend-swatch" style="background:#ef4444"></span>HIGH</span>
-        <span style="margin-left:auto; font-size:9px; color:#555;">▲ = AQHSO Camera · ψ = Quantum probability</span>
+        <span style="margin-left:auto; font-size:9px; color:#555;">▲ = optimal camera (AQHSO plan) · ψ = quantum probability</span>
       </div>
+    </div>
+
+    <!-- AQHSO: offline placement + what runtime does -->
+    <div class="card aqhso-info-card">
+      <div class="card-title">AQHSO &amp; camera placement</div>
+      <p class="aqhso-lead">
+        <strong>AQHSO</strong> (adaptive quantum-inspired search) is used in <em>two</em> ways here:
+        (1) <strong>Planning</strong> — a one-time run places a small set of cameras on the 16-zone grid to minimise coverage error while biasing toward doors/anchors.
+        (2) <strong>Live pipeline</strong> — an AQHSO-style <strong>adaptive threshold</strong> tightens or loosens CLIP / Isolation Forest cutoffs (e.g. after quiet periods or at night) so alerts stay calibrated.
+      </p>
+      <p id="aqhso-placement-status" class="aqhso-status">Loading placement data…</p>
+      <p id="aqhso-grid-meta" class="aqhso-meta"></p>
+      <details class="aqhso-details">
+        <summary>Optimal camera → zone list</summary>
+        <ul id="aqhso-cam-list" class="aqhso-cam-list"></ul>
+      </details>
     </div>
 
     <!-- Latest alert card -->

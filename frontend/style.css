@@ -257,6 +257,65 @@ body {
 
 /* ── SVG Hostel Map ────────────────────────────────────────── */
 .svg-map-card { grid-column: 1 / -1; }
+.aqhso-info-card { grid-column: 1 / -1; }
+
+.aqhso-lead {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #b8b8c8;
+  margin-bottom: 12px;
+  max-width: 900px;
+}
+.aqhso-lead em { color: #888; font-style: italic; }
+.aqhso-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: #34d399;
+  margin-bottom: 6px;
+}
+.aqhso-status .aqhso-warn { color: #fbbf24; font-weight: 500; }
+.aqhso-meta {
+  font-size: 11px;
+  color: #555;
+  margin-bottom: 10px;
+}
+.aqhso-details {
+  margin-top: 4px;
+  border-top: 1px solid #1e1e2a;
+  padding-top: 10px;
+}
+.aqhso-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #7c3aed;
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+.aqhso-details summary:hover { color: #a78bfa; }
+.aqhso-cam-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.aqhso-cam-list li {
+  font-size: 11px;
+  color: #aaa;
+  background: #101018;
+  border: 1px solid #1e1e2a;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.aqhso-cam-list .muted { color: #555; font-size: 10px; }
+.map-tooltip .tt-aqhso {
+  font-size: 10px;
+  color: #a78bfa;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #2a2a38;
+}
 .svg-map-container {
   position: relative;
   border-radius: 10px;
