@@ -15,7 +15,7 @@
 
   <!-- ── HEADER ───────────────────────────────────────────────── -->
   <div class="header">
-    <div>
+    <div class="header-title">
       <h1>PS-003 Intrusion Monitor</h1>
       <p class="header-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC · Trajectory Topology</p>
     </div>
@@ -99,7 +99,14 @@
     </div>
   </div>
 
-  <!-- ── MAIN GRID ─────────────────────────────────────────────── -->
+  <!-- ── MAIN CONTENT: Z-axis floor selector + dashboard ───────── -->
+  <div class="main-content">
+    <aside class="floor-selector" id="floor-selector">
+      <div class="floor-header">Z-AXIS</div>
+      <div class="floor-buttons" id="floor-buttons-container">
+      </div>
+    </aside>
+    <div class="dashboard-grid">
   <div class="main-grid">
 
     <!-- Hostel SVG Heatmap -->
@@ -172,6 +179,8 @@
       </div>
     </div>
 
+  </div>
+    </div>
   </div>
 
   <!-- ── EVENT FEED ─────────────────────────────────────────────── -->

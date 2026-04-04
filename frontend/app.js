@@ -24,6 +24,55 @@ function esc(s) {
 let _latestEvent = null;
 let _placements  = {};
 let _zoneBehaviors = {};
+let currentFloor = 1; // Default to Ground / Floor 1
+const TOTAL_FLOORS = 16;
+
+/** Parse backend zone ids: F3_Z5 → floor 3, local zone 5; plain "5" → floor 1, zone 5 */
+function parseFloorZone(raw) {
+  if (raw == null) return { floor: currentFloor, localZone: null };
+  const s = String(raw).trim();
+  if (!s.includes('_')) {
+    const n = parseInt(s, 10);
+    return { floor: 1, localZone: Number.isFinite(n) ? n : null };
+  }
+  const parts = s.split('_');
+  const floorStr = parts[0].replace(/^F/i, '');
+  const parsedFloor = parseInt(floorStr, 10);
+  const zPart = parts[1] || '';
+  const localZone = parseInt(zPart.replace(/^Z/i, ''), 10);
+  return {
+    floor: Number.isFinite(parsedFloor) ? parsedFloor : 1,
+    localZone: Number.isFinite(localZone) ? localZone : null,
+  };
+}
+
+function clearAllFloorThreats() {
+  document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('threat'));
+}
+
+/** Clear the 2D map layers so another floor does not inherit the previous floor's zone scores. */
+function resetPerFloorZoneOverlays() {
+  for (let i = 0; i < 16; i++) {
+    const poly = document.getElementById('zpoly-' + i);
+    const risk = document.getElementById('zlbl-' + i);
+    const psi  = document.getElementById('zpsi-' + i);
+    if (poly) {
+      poly.style.fill = 'transparent';
+      poly.style.stroke = 'rgba(52,211,153,0.35)';
+      poly.classList.remove('risk-HIGH', 'quantum-diffusing');
+    }
+    if (risk) { risk.textContent = 'LOW'; risk.style.fill = 'rgba(255,255,255,0.35)'; }
+    if (psi)  { psi.textContent = ''; }
+    _zoneState[i] = { score: 0, risk: 'LOW', behavior: '', psi: 0 };
+  }
+  _zoneBehaviors = {};
+  _trajHistory.length = 0;
+  const tline = document.getElementById('traj-path');
+  if (tline) {
+    tline.setAttribute('points', '');
+    tline.classList.remove('active');
+  }
+}
 
 /* ── SVG Zone Definitions — Doubled B1/B2 & matching B9/B10; grid-aligned to outer/inner hex ─ */
 const ZONE_DEFS = [
@@ -130,7 +179,9 @@ function scoreToStroke(score, risk) {
 function updateHeatmap(heatmap) {
   if (!Array.isArray(heatmap)) return;
   for (const h of heatmap) {
-    const z    = h.zone_id;
+    const { floor, localZone } = parseFloorZone(h.zone_id);
+    if (floor !== currentFloor || localZone == null) continue;
+    const z    = localZone;
     const poly = document.getElementById('zpoly-' + z);
     const lbl  = document.getElementById('zlbl-' + z);
     if (!poly) continue;
@@ -154,7 +205,9 @@ function updateHeatmap(heatmap) {
 /* ── Zone behavior labels ─────────────────────────────────── */
 function updateZoneBehaviors(evt) {
   if (!evt) return;
-  const zoneId = evt.zone_id;
+  const { floor, localZone } = parseFloorZone(evt.zone_id);
+  if (floor !== currentFloor || localZone == null) return;
+  const zoneId = localZone;
   const risk = evt.risk_tier || 'LOW';
   const behavior = evt.behavior || '';
   const traj = evt.trajectory || {};
@@ -284,7 +337,40 @@ function renderPixelHeatmap() {
 }
 
 function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
-  if (quantumField) {
+  clearAllFloorThreats();
+
+  let localQuantumField = [];
+
+  if (quantumField && quantumField.length > 0) {
+    quantumField.forEach(q => {
+      let floorStr = '1';
+      let localZoneId = q.zone_id;
+
+      if (String(q.zone_id).includes('_')) {
+        const parts = String(q.zone_id).split('_');
+        floorStr = parts[0].replace(/^F/i, '');
+        localZoneId = parseInt(String(parts[1] || '').replace(/^Z/i, ''), 10);
+      } else {
+        localZoneId = parseInt(String(q.zone_id), 10);
+      }
+
+      const parsedFloor = parseInt(floorStr, 10);
+      const prob = Number(q.probability) || 0;
+
+      if (parsedFloor !== currentFloor && prob > 0.15) {
+        const threatBtn = document.getElementById(`btn-floor-${parsedFloor}`);
+        if (threatBtn) threatBtn.classList.add('threat');
+      }
+
+      if (parsedFloor === currentFloor && Number.isFinite(localZoneId)) {
+        localQuantumField.push({ zone_id: localZoneId, probability: prob });
+      }
+    });
+  }
+
+  quantumField = localQuantumField;
+
+  if (quantumField.length > 0) {
     // Determine if the quantum tracker is actively pushing probabilities
     const isQuantumActive = quantumState === 'diffusing' || quantumState === 'collapsed' || quantumState === 'tracking';
 
@@ -301,6 +387,12 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
         if (ptxt) ptxt.textContent = '';
       }
     });
+  } else {
+    for (let i = 0; i < 16; i++) {
+      const ptxt = document.getElementById('zpsi-' + i);
+      if (ptxt) ptxt.textContent = '';
+      _zoneState[i] = { ..._zoneState[i], psi: 0 };
+    }
   }
 
   // Update the Quantum Badge UI to match the Inferno aesthetic
@@ -343,7 +435,9 @@ function applyPlacements(data) {
 const _trajHistory = [];
 function updateTrajectoryPath(evt) {
   if (!evt || evt.zone_id == null) return;
-  const def = ZONE_DEFS.find(z => z.id === evt.zone_id);
+  const { floor, localZone } = parseFloorZone(evt.zone_id);
+  if (floor !== currentFloor || localZone == null) return;
+  const def = ZONE_DEFS.find(z => z.id === localZone);
   if (!def) return;
   _trajHistory.push({ x: def.cx, y: def.cy });
   if (_trajHistory.length > 10) _trajHistory.shift();
@@ -545,7 +639,17 @@ let _currentAlertSignature = '';
 function renderAlertCard(evt) {
   const r     = evt.reasoning || {};
   const risk  = r.risk_level || evt.risk_tier || 'LOW';
-  
+  const pz    = parseFloorZone(evt.zone_id);
+
+  if (pz.floor !== currentFloor || pz.localZone == null) {
+    if (pz.localZone != null && (risk === 'HIGH' || risk === 'CRITICAL')) {
+      const threatBtn = document.getElementById(`btn-floor-${pz.floor}`);
+      if (threatBtn) threatBtn.classList.add('threat');
+    }
+    return;
+  }
+  const localZone = pz.localZone;
+
   // Create a unique signature for this specific ongoing event
   const sig = `${evt.zone_id}-${risk}-${evt.behavior}`;
   const now = Date.now();
@@ -569,7 +673,7 @@ function renderAlertCard(evt) {
   if (risk === 'HIGH' || risk === 'CRITICAL') {
     document.body.classList.add('alert-mode');
     alertWrap.classList.add('alert-critical');
-    spawnRipple(evt.zone_id);
+    spawnRipple(localZone);
   } else {
     document.body.classList.remove('alert-mode');
     alertWrap.classList.remove('alert-critical');
@@ -649,7 +753,7 @@ function renderAlertCard(evt) {
 
   if (risk === 'HIGH' || risk === 'CRITICAL') {
     const tw = document.getElementById('tw-target');
-    const zoneStr = ZONE_DEFS.find(z => z.id === evt.zone_id)?.label || `Z${evt.zone_id}`;
+    const zoneStr = ZONE_DEFS.find(z => z.id === localZone)?.label || `Z${localZone}`;
     const bStr = evt.behavior_label || evt.behavior || '';
     const txt = `⚠ Intrusion detected...\n→ Zone ${zoneStr}\n→ Behavior: ${bStr.replace(/_/g, ' ')}\n→ Risk: ${risk}`;
     let i = 0;
@@ -801,6 +905,7 @@ function updateConnectionBadge() {
 
 /* ── Handle system reset message ────────────────────────────── */
 function handleSystemReset() {
+  clearAllFloorThreats();
   // Clear SVG heatmap
   for (let i = 0; i < 16; i++) {
     const poly = document.getElementById('zpoly-' + i);
@@ -914,6 +1019,58 @@ function resetAllZones() {
     });
 }
 
+function buildFloorSelector() {
+  const container = document.getElementById('floor-buttons-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (let i = TOTAL_FLOORS; i >= 1; i--) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `floor-btn ${i === currentFloor ? 'active' : ''}`;
+    btn.id = `btn-floor-${i}`;
+    btn.textContent = `F${i}`;
+    btn.onclick = () => {
+      currentFloor = i;
+      document.querySelectorAll('.floor-btn').forEach(b => {
+        b.classList.remove('active');
+        b.classList.remove('threat');
+      });
+      btn.classList.add('active');
+
+      const title = document.querySelector('.header-title h1');
+      if (title) title.textContent = `PS-003 INTRUSION MONITOR // LEVEL ${i}`;
+
+      const canvas = document.getElementById('pixel-heatmap');
+      if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+      resetPerFloorZoneOverlays();
+      if (_latestEvent && Array.isArray(_latestEvent.heatmap)) updateHeatmap(_latestEvent.heatmap);
+      if (_latestEvent && Array.isArray(_latestEvent.quantum_field)) {
+        updateQuantumOverlay(
+          _latestEvent.quantum_field,
+          _latestEvent.quantum_state,
+          _latestEvent.quantum_entropy
+        );
+      } else {
+        updateQuantumOverlay([], 'idle', 0);
+      }
+    };
+    container.appendChild(btn);
+  }
+
+  const title = document.querySelector('.header-title h1');
+  if (title) title.textContent = `PS-003 INTRUSION MONITOR // LEVEL ${currentFloor}`;
+}
+
+function initApp() {
+  buildFloorSelector();
+  loadInitialData();
+  connect();
+  setInterval(pollStats, 3000);
+  setInterval(measureLatency, 5000);
+}
+
 /* ── Load initial data ───────────────────────────────────────── */
 function loadInitialData() {
   fetch(API_BASE + '/events')
@@ -996,7 +1153,4 @@ function connect() {
 }
 
 /* ── Boot ────────────────────────────────────────────────────── */
-loadInitialData();
-connect();
-setInterval(pollStats, 3000);
-setInterval(measureLatency, 5000);
+initApp();

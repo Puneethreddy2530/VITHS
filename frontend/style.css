@@ -3,6 +3,14 @@
 
 /* ── Google Fonts ───────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+:root {
+  --panel-bg: #13131b;
+  --border-color: #1e1e2a;
+  --text-muted: #888;
+  --text-color: #e0e0e0;
+}
 
 /* ── Base ───────────────────────────────────────────────────── */
 body {
@@ -672,4 +680,80 @@ body.alert-mode > *:not(.main-grid) {
   padding-left: 14px;
   font-weight: 600;
   text-shadow: 0 0 10px rgba(239,68,68,0.4);
+}
+
+/* ── Vertical Floor Selector ──────────────── */
+.main-content {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+}
+.dashboard-grid {
+  flex: 1;
+  min-width: 0;
+}
+.floor-selector {
+  width: 60px;
+  flex-shrink: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 10;
+  max-height: min(90vh, 920px);
+  align-self: flex-start;
+  position: sticky;
+  top: 12px;
+}
+.floor-header {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+.floor-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.floor-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 2px solid transparent;
+}
+.floor-btn:hover {
+  color: var(--text-color);
+  background: rgba(255,255,255,0.05);
+}
+.floor-btn.active {
+  color: #34d399; /* Neon Green */
+  border-left: 2px solid #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  font-weight: bold;
+}
+.floor-btn.threat {
+  color: #fca5a5;
+  border-left: 2px solid #ef4444; /* Crimson Red */
+  background: rgba(239, 68, 68, 0.15);
+  animation: pulse-threat 1s infinite alternate;
+}
+@keyframes pulse-threat {
+  from { background: rgba(239, 68, 68, 0.15); box-shadow: inset 0 0 0px #ef4444; }
+  to { background: rgba(239, 68, 68, 0.4); box-shadow: inset 0 0 10px #ef4444; }
 }
