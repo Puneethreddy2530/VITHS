@@ -36,6 +36,14 @@ _PIPELINE_LOCK = threading.Lock()
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _alert_queue: "queue.Queue" = queue.Queue(maxsize=8)
 
+try:
+    from neopulse_pqc import pqc_router as _neopulse_pqc_router
+    from neopulse_pqc import warmup_pqc_shield as _neopulse_pqc_warmup
+except Exception as _pqc_err:
+    _neopulse_pqc_router = None
+    _neopulse_pqc_warmup = None
+    print(f"[WARN] Post-quantum module unavailable: {_pqc_err}")
+
 # ── Voice dispatch (pyttsx3) ───────────────────────────────────────
 tts_queue = queue.Queue()
 
@@ -341,6 +349,11 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(alert_consumer_loop())
     asyncio.create_task(motion_broadcast_loop())
+    if _neopulse_pqc_warmup:
+        try:
+            _neopulse_pqc_warmup()
+        except Exception as _pqw:
+            print(f"[WARN] NeoPulse-Shield warmup failed: {_pqw}")
     print("All models loaded. Backend ready.\n")
     yield
 
@@ -350,6 +363,8 @@ async def lifespan(app: FastAPI):
     camera_streams.clear()
 
 app = FastAPI(title="PS-003 AI Intrusion Monitor", version="1.0.0", lifespan=lifespan)
+if _neopulse_pqc_router is not None:
+    app.include_router(_neopulse_pqc_router)
 app.add_middleware(CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -1006,6 +1021,23 @@ async def serve_favicon_png():
     return Response(status_code=204)
 
 
+@app.get("/static/PQC.jpg")
+async def serve_pqc_diagram_jpg():
+    """
+    Explicit route so the PQ diagram always resolves (mount quirks / missing file in static/).
+    Tries frontend/static/PQC.jpg then repo-root PQC.jpg.
+    """
+    for candidate in (
+        os.path.join(static_path, "PQC.jpg"),
+        os.path.join(_ROOT_DIR, "PQC.jpg"),
+    ):
+        if os.path.isfile(candidate):
+            return FileResponse(candidate, media_type="image/jpeg")
+    return Response(status_code=404, content="PQC.jpg not found — add frontend/static/PQC.jpg or VITHS/PQC.jpg")
+
+
+# Ensure static dir exists so /static/* and CCTV assets resolve reliably
+os.makedirs(static_path, exist_ok=True)
 if os.path.isdir(static_path):
     app.mount("/static", StaticFiles(directory=static_path), name="cctv_static")
 

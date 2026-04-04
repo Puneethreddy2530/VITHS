@@ -386,13 +386,38 @@
     </div>
   </div>
 
-  <!-- ── EVENT FEED ─────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="card-title">Activity log</div>
-    <div class="feed-scroll" id="event-feed">
-      <p class="feed-empty" id="feed-empty">No events yet</p>
+  <!-- ── ACTIVITY LOG + PQ INTEGRITY (split row) ───────────────── -->
+  <section class="activity-pqc-strip" aria-label="Activity log and post-quantum layer">
+    <div class="card activity-log-card">
+      <div class="activity-log-card__head">
+        <div class="activity-log-card__titles">
+          <h2 class="activity-log-card__title">Activity log</h2>
+          <p class="activity-log-card__meta">Live stream · newest first · signed events show 🔐</p>
+        </div>
+      </div>
+      <div class="feed-scroll activity-log-feed" id="event-feed">
+        <p class="feed-empty" id="feed-empty">No events yet</p>
+      </div>
     </div>
-  </div>
+
+    <aside class="activity-pqc-card">
+      <div class="activity-pqc-card__head">
+        <p class="activity-pqc-card__eyebrow">NeoPulse-Shield</p>
+        <h2 class="activity-pqc-card__title">Post-quantum integrity</h2>
+        <p class="activity-pqc-card__sub">Hybrid stack: Dilithium3 (FIPS 204) · HMAC-SHA3-256 · UOV-sim — binds alerts and payloads against classical and quantum forgery.</p>
+      </div>
+      <div class="activity-pqc-card__viewport">
+        <div class="activity-pqc-card__grid-bg" aria-hidden="true"></div>
+        <div class="activity-pqc-card__shine" aria-hidden="true"></div>
+        <img src="/static/PQC.jpg" alt="VITHS hybrid post-quantum cryptographic architecture diagram" class="activity-pqc-card__img" width="640" height="400" loading="eager" decoding="async" title="Click to enlarge" />
+      </div>
+      <div class="activity-pqc-card__footer">
+        <span class="pqc-chip">ML-DSA / Dilithium</span>
+        <span class="pqc-chip">128-bit aggregate</span>
+        <span class="pqc-chip">SHA3 binding</span>
+      </div>
+    </aside>
+  </section>
 
   <!-- ── PHYSICS + TRAJECTORY ────────────────────────────────── -->
   <div class="physics-traj-grid">
@@ -476,26 +501,61 @@
       <span class="demo-toggle" id="demo-toggle">▶</span>
     </div>
     <div class="demo-body collapsed" id="demo-body">
-      <button type="button" class="demo-btn" style="border-color:#34d399; color:#34d399;" onclick="runScenario('faiss_memory', this)">
-        Past incident recall
-      </button>
-      <button type="button" class="demo-btn" style="border-color:#c4b5fd; color:#c4b5fd;" onclick="runScenario('quantum_diffusion', this)">
-        Multi-zone tracking
-      </button>
-      <button type="button" class="demo-btn" style="border-color:#f9a8d4; color:#f9a8d4;" onclick="runScenario('trajectory_mule', this)">
-        Suspicious path
-      </button>
-      <button type="button" class="demo-btn" style="border-color:#fca5a5; color:#fca5a5;" onclick="runScenario('physics_chaos', this)">
-        Crowd commotion
-      </button>
+      <div class="demo-btn-grid">
+        <button type="button" class="demo-btn" style="border-color:#34d399; color:#34d399;" onclick="runScenario('faiss_memory', this)">
+          Past incident recall
+        </button>
+        <button type="button" class="demo-btn" style="border-color:#c4b5fd; color:#c4b5fd;" onclick="runScenario('quantum_diffusion', this)">
+          Multi-zone tracking
+        </button>
+        <button type="button" class="demo-btn" style="border-color:#f9a8d4; color:#f9a8d4;" onclick="runScenario('trajectory_mule', this)">
+          Suspicious path
+        </button>
+        <button type="button" class="demo-btn" style="border-color:#fca5a5; color:#fca5a5;" onclick="runScenario('physics_chaos', this)">
+          Crowd commotion
+        </button>
+        <button type="button" class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
+          Reset all
+        </button>
+      </div>
 
-      <button type="button" class="demo-btn btn-warning" id="tamper-btn" onclick="runTamperDemo()">
-        Alert integrity check
-      </button>
-      <button type="button" class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
-        Reset all
-      </button>
-      <div class="demo-result" id="tamper-result" style="grid-column: 1 / -1; margin-top: 5px;"></div>
+      <div class="demo-tamper-pqc-split">
+        <div class="demo-tamper-half">
+          <div class="demo-tamper-half__head">Alert integrity (PQC-backed log)</div>
+          <button type="button" class="demo-btn btn-warning demo-tamper-btn" id="tamper-btn" onclick="runTamperDemo()">
+            Alert integrity check
+          </button>
+          <div class="demo-result demo-tamper-result" id="tamper-result"></div>
+        </div>
+        <div class="demo-pqc-half">
+          <div class="pqc-panel">
+            <div class="pqc-panel__head">
+              <span class="pqc-panel__title">NeoPulse-Shield</span>
+              <span class="pqc-panel__badge" id="pqc-status-badge">…</span>
+            </div>
+            <p class="pqc-panel__sub">Dilithium3 · HMAC-SHA3-256 · UOV-sim — live benchmark vs RSA-4096 reference</p>
+            <div class="pqc-panel__diagram">
+              <img src="/static/PQC.jpg" alt="Post-quantum hybrid architecture diagram" class="pqc-diagram-img" width="640" height="360" loading="eager" decoding="async" title="Click to enlarge" />
+            </div>
+            <div class="pqc-chart-wrap">
+              <canvas id="pqc-bench-chart" class="pqc-bench-chart" width="520" height="168" aria-label="PQ sign and verify latency bars"></canvas>
+            </div>
+            <div class="pqc-bench-meta" id="pqc-bench-meta">Open panel and run benchmark.</div>
+            <button type="button" class="demo-btn pqc-bench-btn" id="pqc-bench-btn" style="border-color:#a78bfa; color:#c4b5fd;">
+              Run live PQ benchmark
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pqc-lightbox" class="pqc-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="pqc-lightbox-title">
+    <div class="pqc-lightbox__backdrop" aria-hidden="true"></div>
+    <div class="pqc-lightbox__panel">
+      <h2 id="pqc-lightbox-title" class="pqc-lightbox__sr-only">Enlarged PQC architecture diagram</h2>
+      <button type="button" class="pqc-lightbox__close" id="pqc-lightbox-close" aria-label="Close">Close</button>
+      <img class="pqc-lightbox__img" id="pqc-lightbox-img" alt="" width="1280" height="800" />
     </div>
   </div>
 

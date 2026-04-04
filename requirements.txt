@@ -28,3 +28,6 @@ matplotlib==3.10.3
 requests==2.33.0
 websockets==16.0
 pyttsx3
+
+# Post-quantum (NeoPulse-Shield — Dilithium3 + HMAC-SHA3 + UOV-sim)
+dilithium-py

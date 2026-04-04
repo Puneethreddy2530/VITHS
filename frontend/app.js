@@ -31,6 +31,9 @@ const TOTAL_FLOORS = 16;
 let _layer1BlazeLoadPromise = null;
 let _layer1FaceRafId = null;
 
+/** Last PQ benchmark payload (redraw chart on panel open / resize) */
+let _lastPqcBench = null;
+
 /**
  * Map F*_Z* suffix to SVG zone index 0..15.
  * Z1..Z16 = blocks B1..Gate (1-based, matches mobile zoneNumber = backend+1).
@@ -1097,12 +1100,16 @@ function addEventRow(evt) {
   row.className = 'event-row';
   row.innerHTML = `
     <span class="evt-dot" style="background:${color}"></span>
-    <span class="evt-time">${esc(ts)}</span>
-    <span class="evt-zone" title="${esc(zoneTitle)}">${esc(gridB)}</span>
-    <span class="evt-label">${esc(evt.behavior_label || evt.behavior || '')}</span>
-    ${evt.pattern_id ? `<span class="evt-pat">${esc(evt.pattern_id)}</span>` : ''}
-    <span class="evt-risk" style="color:${color}">${esc(risk)}</span>
-    ${evt.pqc_signature ? `<span class="evt-pqc" title="PQC Signed">🔐</span>` : ''}
+    <div class="evt-cluster">
+      <span class="evt-time">${esc(ts)}</span>
+      <span class="evt-zone" title="${esc(zoneTitle)}">${esc(gridB)}</span>
+      <span class="evt-label">${esc(evt.behavior_label || evt.behavior || '')}</span>
+    </div>
+    <div class="evt-meta">
+      ${evt.pattern_id ? `<span class="evt-pat">${esc(evt.pattern_id)}</span>` : ''}
+      <span class="evt-risk" style="color:${color}">${esc(risk)}</span>
+      ${evt.pqc_signature ? `<span class="evt-pqc" title="PQ-signed event">🔐</span>` : ''}
+    </div>
   `;
 
   const feed = document.getElementById('event-feed');
@@ -1262,6 +1269,125 @@ function toggleDemoPanel() {
   const toggle = document.getElementById('demo-toggle');
   body.classList.toggle('collapsed');
   toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
+  if (!body.classList.contains('collapsed')) {
+    requestAnimationFrame(() => {
+      if (_lastPqcBench) drawPqcBenchmarkChart(_lastPqcBench);
+    });
+  }
+}
+
+function drawPqcBenchmarkChart(bench) {
+  const canvas = document.getElementById('pqc-bench-chart');
+  if (!canvas || !bench) return;
+  const wrap = canvas.parentElement;
+  const w = Math.max(260, (wrap && wrap.clientWidth) ? wrap.clientWidth - 16 : 480);
+  const h = 168;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const rsa = bench.rsa4096_sign_ms || 2100;
+  const sign = Number(bench.sign_ms_avg) || 0;
+  const ver = Number(bench.verify_ms_avg) || 0;
+  const maxMs = Math.max(rsa, sign * 1.15, ver * 1.15, 1) * 1.06;
+  const padL = 8;
+  const padR = 8;
+  const baseY = h - 40;
+  const topY = 22;
+  const chartW = w - padL - padR;
+  const gap = Math.max(10, chartW * 0.06);
+  const barW = (chartW - gap * 2) / 3;
+  let x0 = padL;
+  function drawBar(x, ms, fill, label) {
+    const bh = Math.max(2, ((ms / maxMs) * (baseY - topY)) | 0);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, baseY - bh, barW, bh);
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, baseY - bh, barW, bh);
+    ctx.fillStyle = '#71717a';
+    ctx.font = '600 10px Inter, system-ui, sans-serif';
+    ctx.fillText(label, x, h - 24);
+    ctx.font = '10px JetBrains Mono, ui-monospace, monospace';
+    ctx.fillStyle = '#a1a1aa';
+    ctx.fillText(ms.toFixed(1) + ' ms', x, h - 8);
+  }
+  ctx.fillStyle = '#52525b';
+  ctx.font = '10px Inter, sans-serif';
+  ctx.fillText('Latency (ms)', padL, 14);
+  drawBar(x0, sign, 'rgba(52, 211, 153, 0.85)', 'PQ sign');
+  x0 += barW + gap;
+  drawBar(x0, ver, 'rgba(96, 165, 250, 0.9)', 'PQ verify');
+  x0 += barW + gap;
+  drawBar(x0, rsa, 'rgba(63, 63, 70, 0.95)', 'RSA-4096 ref');
+}
+
+function setPqcBenchMeta(bench) {
+  const el = document.getElementById('pqc-bench-meta');
+  if (!el || !bench) return;
+  const layers = Array.isArray(bench.layers) ? bench.layers.join(' · ') : '';
+  el.innerHTML =
+    `${esc('Speedup vs RSA-4096 sign (ref ' + (bench.rsa4096_sign_ms || 2100) + ' ms): ~' + (bench.speedup_vs_rsa || 0) + '×')}<br/>` +
+    `${esc('Security: ' + (bench.security_bits || 128) + '-bit aggregate · ' + (bench.nist_standard || 'FIPS 204'))}<br/>` +
+    `${esc('Runs: ' + (bench.benchmark_runs || 0) + (layers ? ' · ' + layers : ''))}`;
+}
+
+function refreshPqcStatusBadge() {
+  const badge = document.getElementById('pqc-status-badge');
+  if (!badge) return;
+  fetch(API_BASE + '/pqc/status')
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((d) => {
+      badge.textContent = d.online ? 'ONLINE' : '—';
+      badge.style.color = d.online ? '#34d399' : '#a1a1aa';
+      badge.style.borderColor = d.online ? 'rgba(52,211,153,0.35)' : '#3f3f46';
+    })
+    .catch(() => {
+      badge.textContent = 'OFFLINE';
+      badge.style.color = '#fca5a5';
+      badge.style.borderColor = 'rgba(239,68,68,0.35)';
+    });
+}
+
+function runPqcBenchmark(btn) {
+  const meta = document.getElementById('pqc-bench-meta');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  if (meta) meta.textContent = 'Benchmark running (Dilithium3 sign/verify cycles)…';
+  fetch(API_BASE + '/pqc/benchmark?n=10')
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((b) => {
+      _lastPqcBench = b;
+      drawPqcBenchmarkChart(b);
+      setPqcBenchMeta(b);
+      btn.textContent = orig;
+      btn.disabled = false;
+    })
+    .catch(() => {
+      if (meta) {
+        meta.innerHTML = '<span style="color:#fca5a5">PQ benchmark unavailable — install dilithium-py and restart the API.</span>';
+      }
+      btn.textContent = orig;
+      btn.disabled = false;
+    });
+}
+
+function wirePqcBenchPanel() {
+  const btn = document.getElementById('pqc-bench-btn');
+  if (btn) btn.addEventListener('click', () => runPqcBenchmark(btn));
+  refreshPqcStatusBadge();
+  let resizeT = null;
+  window.addEventListener('resize', () => {
+    if (resizeT) clearTimeout(resizeT);
+    resizeT = setTimeout(() => {
+      if (_lastPqcBench) drawPqcBenchmarkChart(_lastPqcBench);
+    }, 150);
+  });
 }
 
 function runScenario(name, btn) {
@@ -1603,12 +1729,67 @@ function wireLayer1Showcase() {
   wireLayer1FaceOverlays(root, Array.from(videos));
 }
 
+/** PQC architecture images: fullscreen lightbox with close / Esc / backdrop. */
+function wirePqcImageLightbox() {
+  const lb = document.getElementById('pqc-lightbox');
+  const lbImg = document.getElementById('pqc-lightbox-img');
+  const closeBtn = document.getElementById('pqc-lightbox-close');
+  const backdrop = lb?.querySelector('.pqc-lightbox__backdrop');
+  if (!lb || !lbImg || !closeBtn) return;
+
+  function openLb(src, alt) {
+    if (!src) return;
+    lbImg.src = src;
+    lbImg.alt = alt || 'PQC architecture diagram';
+    lb.removeAttribute('hidden');
+    document.body.classList.add('pqc-lightbox-open');
+    closeBtn.focus();
+  }
+
+  function closeLb() {
+    lb.setAttribute('hidden', '');
+    document.body.classList.remove('pqc-lightbox-open');
+    lbImg.src = '';
+    lbImg.alt = '';
+  }
+
+  document.querySelectorAll('.activity-pqc-card__img, .pqc-diagram-img').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openLb(el.currentSrc || el.src, el.getAttribute('alt') || '');
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openLb(el.currentSrc || el.src, el.getAttribute('alt') || '');
+      }
+    });
+    if (!el.getAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  });
+
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeLb();
+  });
+  backdrop?.addEventListener('click', closeLb);
+  lb.addEventListener('click', (e) => {
+    if (e.target === lb) closeLb();
+  });
+  lbImg.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !lb.hasAttribute('hidden')) closeLb();
+  });
+}
+
 function initApp() {
   applyInitialFloorFromQuery();
   buildFloorSelector();
   wireTvDisplayConnections();
   wireCctvToolbar();
   wireLayer1Showcase();
+  wirePqcBenchPanel();
+  wirePqcImageLightbox();
   loadInitialData();
   connect();
   setInterval(pollStats, 3000);
