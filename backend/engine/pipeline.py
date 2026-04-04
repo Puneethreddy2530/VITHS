@@ -1,4 +1,4 @@
-"""
+f"""
 Phase 2 — pipeline.py
 Adds on top of Phase 1 detector:
   1. Behavior classifier     — loiter / fast-move / animal / normal
@@ -358,7 +358,7 @@ class Pipeline:
                 result["clip_score"] > (thresholds.get("clip", 0.42) + 0.15) or
                 abs(result["divergence"]) > 3.0 or
                 abs(result["curl"]) > 3.0 or
-                result.get("chaos", 0) > 0.5
+                result["lyapunov"] > 0.5
             )
             if is_anomaly:
                 result["forced_risk"] = "LOW"
@@ -372,7 +372,7 @@ class Pipeline:
                 )
                 or abs(result["divergence"]) > 0.5
                 or abs(result["curl"]) > 0.5
-                or result.get("chaos", 0) > 0.15
+                or result["lyapunov"] > 0.15
             )
 
         # ── Schrödinger Tracker update ───────────────────────────────
