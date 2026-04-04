@@ -100,49 +100,48 @@
   <!-- ── COMMAND CENTER 2×2 CCTV MATRIX ───────────────────────── -->
   <div class="card cctv-matrix-card" style="padding: 12px;">
     <div class="cctv-matrix-card-head">
-      <div class="video-header">
+      <div class="video-header cctv-matrix-video-header">
         <span class="card-title" style="margin:0">Command Center Multi-Feed Matrix</span>
-        <span class="on-air">● SYSTEM ACTIVE</span>
-      </div>
-      <div class="cctv-demo-toolbar" aria-label="Demo clip controls">
-        <span class="cctv-demo-hint">Demo: Running away · Lobby · Low light</span>
-        <div class="cctv-demo-actions">
-          <button type="button" id="cctv-demo-pause" class="cctv-demo-btn">Pause</button>
-          <button type="button" id="cctv-demo-reset" class="cctv-demo-btn cctv-demo-btn-secondary">Reset</button>
+        <div class="cctv-matrix-header-actions">
+          <span class="on-air">● SYSTEM ACTIVE</span>
         </div>
       </div>
     </div>
     <div class="cctv-matrix" id="cctv-matrix-root">
       <div class="cctv-feed" id="cctv-0">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 01 // ZONE B1 (LIVE ML)</span>
+          <span class="cctv-label">CAM 01 // ZONE B1</span>
           <span class="cctv-status">OK</span>
         </div>
-        <img src="/video_feed" alt="Live Stream" onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+        <img src="/video_feed/0" alt="Stream 0"
+          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/0?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
       </div>
 
       <div class="cctv-feed" id="cctv-4">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 02 // RUNNING AWAY (DEMO)</span>
+          <span class="cctv-label">CAM 02 // ZONE B5</span>
           <span class="cctv-status">OK</span>
         </div>
-        <video class="cctv-demo-video" src="/static/cctv_corridor.mp4" autoplay loop muted playsinline></video>
+        <img src="/video_feed/4" alt="Stream 4"
+          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/4?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
       </div>
 
       <div class="cctv-feed" id="cctv-15">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 03 // CROWD LOBBY (DEMO)</span>
+          <span class="cctv-label">CAM 03 // MAIN GATE</span>
           <span class="cctv-status">OK</span>
         </div>
-        <video class="cctv-demo-video" src="/static/cctv_gate.mp4" autoplay loop muted playsinline></video>
+        <img src="/video_feed/15" alt="Stream 15"
+          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/15?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
       </div>
 
       <div class="cctv-feed" id="cctv-7">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 04 // LOW LIGHT (DEMO)</span>
+          <span class="cctv-label">CAM 04 // ZONE B8</span>
           <span class="cctv-status">OK</span>
         </div>
-        <video class="cctv-demo-video" src="/static/cctv_parking.mp4" autoplay loop muted playsinline></video>
+        <img src="/video_feed/7" alt="Stream 7"
+          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/7?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
       </div>
     </div>
   </div>
@@ -323,8 +322,8 @@
   <div style="margin-top:16px;">
     <div class="panel">
       <div class="panel-title">Live Feed — physics overlay</div>
-      <img id="video-feed" src="/video_feed" style="width:100%; border-radius:8px; display:block;"
-        onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
+      <img id="video-feed" src="/video_feed/0" style="width:100%; border-radius:8px; display:block;"
+        onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed/0?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
       <div style="font-size:10px; color:#444; margin-top:6px;">
         Divergence · Curl · Lyapunov · No facial recognition
       </div>

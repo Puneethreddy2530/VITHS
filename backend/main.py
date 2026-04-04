@@ -2,7 +2,7 @@
 Phase 5 — main.py
 FastAPI backend. All detection layers unified here.
 """
-import sys, os, asyncio, json, time, threading, random, copy
+import sys, os, asyncio, json, time, threading, random, copy, queue
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cv2
@@ -11,7 +11,7 @@ from datetime import datetime
 from collections import deque
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -30,8 +30,13 @@ latest_frame       = None
 raw_frame          = None
 camera_healthy     = True
 
+# Multi-stream CCTV (MJPEG); populated in lifespan
+camera_streams: dict = {}
+_PIPELINE_LOCK = threading.Lock()
+_ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_alert_queue: "queue.Queue" = queue.Queue(maxsize=8)
+
 # ── Voice dispatch (pyttsx3) ───────────────────────────────────────
-import queue
 tts_queue = queue.Queue()
 
 try:
@@ -120,59 +125,160 @@ def _get_camera_priority_indices():
         return [(i, f"Camera@{i}") for i in range(4)]
 
 
-# ── Dedicated Camera Capture Thread ──────────────────────────────
-def capture_thread_fn():
-    global raw_frame, camera_healthy
-    cap = None
-    print("\n[CAMERA] Enumerating devices to skip virtual/phone cameras...")
+# ── Static video paths (project root) ───────────────────────────
+def _static_video_path(filename: str) -> str:
+    return os.path.join(_ROOT_DIR, "frontend", "static", filename)
 
+
+def _resolve_live_camera_index():
+    """First working physical webcam index, or None."""
+    print("\n[CAMERA] Enumerating devices for live stream 0...")
     priority = _get_camera_priority_indices()
-
     for cam_idx, cam_name in priority:
-        print(f"  Trying index {cam_idx} — '{cam_name}' (DirectShow, native res)...")
-        temp_cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
-
+        print(f"  Trying index {cam_idx} — '{cam_name}'...")
+        temp_cap = (
+            cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
+            if sys.platform.startswith("win")
+            else cv2.VideoCapture(cam_idx)
+        )
         if not temp_cap.isOpened():
-            print(f"    Could not open.")
             temp_cap.release()
             continue
-
-        success = False
-        for _ in range(15):
+        ok = False
+        for _ in range(12):
             ret, fr = temp_cap.read()
             if ret and fr is not None and np.sum(fr) > 0:
-                success = True
+                ok = True
                 break
             time.sleep(0.05)
-
-        if success:
-            cap = temp_cap
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            print(f"\n[CAMERA] SUCCESS — '{cam_name}' at index {cam_idx} ({w}x{h})\n")
-            break
-        else:
-            print(f"    Opened but stream is dead/black — skipping.")
         temp_cap.release()
+        if ok:
+            print(f"[CAMERA] Live stream will use index {cam_idx} — '{cam_name}'\n")
+            return cam_idx
+        print(f"    Dead/black — skipping.")
+    print("[WARN] No working webcam found; zone 0 will use a placeholder.\n")
+    return None
 
-    if cap is None:
-        print("\n[WARN] ALL CAMERAS FAILED. Falling back to simulation.")
-        camera_healthy = False
-        return
 
-    consecutive_failures = 0
-    while True:
-        ret, frame = cap.read()
-        if ret and frame is not None:
-            raw_frame = frame
-            consecutive_failures = 0
+class CameraStream:
+    """
+    One capture thread per zone: resize, optional ML every Nth frame, MJPEG source for /video_feed/{zone_id}.
+    """
+
+    def __init__(self, src, zone_id: int, pipeline):
+        self.zone_id = int(zone_id)
+        self.pipeline = pipeline
+        self.src = src
+        self.latest_frame = None
+        self.latest_raw = None
+        self._last_result = None
+        self.running = True
+        self.cap = None
+        self._placeholder = False
+        self._file_loop = isinstance(src, str)
+
+        if src is None:
+            self._placeholder = True
+        elif isinstance(src, int):
+            if sys.platform.startswith("win"):
+                self.cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+            else:
+                self.cap = cv2.VideoCapture(src)
+            if not self.cap.isOpened():
+                print(f"[STREAM] Could not open webcam index {src} — placeholder for zone {zone_id}")
+                self._placeholder = True
+                if self.cap:
+                    self.cap.release()
+                    self.cap = None
         else:
-            consecutive_failures += 1
-            if consecutive_failures > 30:
-                print("[WARN] Camera feed died during operation.")
-                camera_healthy = False
-                break
-        time.sleep(0.03)  # ~30fps
+            path = src
+            if not os.path.isfile(path):
+                print(f"[STREAM] Missing file {path} — placeholder for zone {zone_id}")
+                self._placeholder = True
+            else:
+                self.cap = cv2.VideoCapture(path)
+                if not self.cap.isOpened():
+                    print(f"[STREAM] cv2 cannot open {path} — placeholder for zone {zone_id}")
+                    self._placeholder = True
+                    self.cap.release()
+                    self.cap = None
+
+        threading.Thread(target=self._update_loop, daemon=True).start()
+
+    def _black_frame(self, msg: str):
+        f = np.zeros((360, 480, 3), dtype=np.uint8)
+        cv2.putText(f, msg, (24, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (120, 120, 130), 1)
+        return f
+
+    def _update_loop(self):
+        print(f"[STREAM] Booting zone {self.zone_id} from {self.src!r}...")
+        frame_skip = 2
+        frame_count = 0
+        last_alert_wall = 0.0
+
+        while self.running:
+            if self._placeholder:
+                self.latest_raw = self._black_frame(f"NO SIGNAL Z{self.zone_id}")
+                self.latest_frame = self.latest_raw.copy()
+                time.sleep(0.08)
+                continue
+
+            ret, frame = self.cap.read()
+            if not ret or frame is None:
+                if self._file_loop and self.cap is not None:
+                    self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                print(f"[ERROR] Stream zone {self.zone_id} read failed.")
+                time.sleep(0.1)
+                continue
+
+            frame = cv2.resize(frame, (480, 360))
+            self.latest_raw = frame.copy()
+            frame_count += 1
+
+            if frame_count % frame_skip == 0:
+                try:
+                    with _PIPELINE_LOCK:
+                        result = self.pipeline.process(frame, zone_id=self.zone_id)
+                        self._last_result = result
+                        self.latest_frame = self.pipeline.annotate(frame.copy(), result)
+                    if (
+                        self.zone_id == 0
+                        and result.get("is_anomaly")
+                        and memory_instance is not None
+                    ):
+                        now = time.time()
+                        if now - last_alert_wall >= 1.0:
+                            last_alert_wall = now
+                            try:
+                                _alert_queue.put_nowait((frame.copy(), result))
+                            except queue.Full:
+                                pass
+                except Exception as e:
+                    print(f"[STREAM] Z{self.zone_id} pipeline error: {e}")
+                    self.latest_frame = frame.copy()
+            else:
+                try:
+                    with _PIPELINE_LOCK:
+                        if self._last_result is not None:
+                            self.latest_frame = self.pipeline.annotate(
+                                frame.copy(), self._last_result
+                            )
+                        else:
+                            self.latest_frame = frame.copy()
+                except Exception:
+                    self.latest_frame = frame.copy()
+
+            time.sleep(0.02)
+
+    def stop(self):
+        self.running = False
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+            self.cap = None
 
 # ── Neuromorphic Event Gate ─────────────────────────────────────────
 class NeuromorphicGate:
@@ -210,6 +316,7 @@ connected_ws: list  = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global pipeline_instance, memory_instance, reasoning_instance
+    global camera_streams, camera_healthy
     print("\nLoading all models...")
     from backend.engine.pipeline import Pipeline
     from backend.engine.memory   import EpisodicMemory
@@ -219,96 +326,82 @@ async def lifespan(app: FastAPI):
     memory_instance    = EpisodicMemory()
     reasoning_instance = ReasoningEngine()
 
-    # Start the hardware camera thread
-    threading.Thread(target=capture_thread_fn, daemon=True).start()
-    
-    # Start the async processing loop
-    asyncio.create_task(camera_loop())
+    camera_healthy = True
+
+    live_idx = _resolve_live_camera_index()
+    camera_streams = {}
+    if live_idx is not None:
+        camera_streams[0] = CameraStream(live_idx, 0, pipeline_instance)
+    else:
+        camera_streams[0] = CameraStream(None, 0, pipeline_instance)
+
+    camera_streams[4]  = CameraStream(_static_video_path("cctv_corridor.mp4"), 4, pipeline_instance)
+    camera_streams[15] = CameraStream(_static_video_path("cctv_gate.mp4"), 15, pipeline_instance)
+    camera_streams[7]  = CameraStream(_static_video_path("cctv_parking.mp4"), 7, pipeline_instance)
+
+    asyncio.create_task(alert_consumer_loop())
+    asyncio.create_task(motion_broadcast_loop())
     print("All models loaded. Backend ready.\n")
     yield
+
+    print("Shutting down streams...")
+    for s in list(camera_streams.values()):
+        s.stop()
+    camera_streams.clear()
 
 app = FastAPI(title="PS-003 AI Intrusion Monitor", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-# ── Background camera processing loop ─────────────────────────────
-async def camera_loop():
-    global latest_frame, raw_frame, camera_healthy
-    
-    # Wait for camera thread to wake up (30s max — PowerShell enum can take 8s+)
-    wait_ticks = 0
-    while raw_frame is None and camera_healthy and wait_ticks < 300:
-        await asyncio.sleep(0.1)
-        wait_ticks += 1
-
-    if not camera_healthy or raw_frame is None:
-        print("[WARN] Switching to simulation mode.")
-        await simulated_loop()
-        return
-
-    last_sleep_mode = None
-    loop = asyncio.get_event_loop()
-
-    def _process_frame(frame):
-        result = pipeline_instance.process(frame, zone_id=0)
-        annotated = pipeline_instance.annotate(frame.copy(), result)
-        enriched = None
-        reasoning = None
-        if result["is_anomaly"]:
-            enriched = memory_instance.process(frame, result)
-            reasoning = reasoning_instance.analyze(
-                enriched,
-                enriched.get("similar_events", []),
-                enriched.get("recurrence", 0)
-            )
-        return annotated, result, enriched, reasoning
-
-    processing_task = None
-    latest_result = None
-
-    last_alert_time = 0
-
-    while camera_healthy:
-        # Pull the frame cleanly from the background thread
-        frame = raw_frame.copy() if raw_frame is not None else None
-        if frame is None:
-            await asyncio.sleep(0.03)
+async def alert_consumer_loop():
+    """Zone-0 anomaly queue → memory / reasoning / WebSocket (thread-safe bridge)."""
+    while True:
+        await asyncio.sleep(0.05)
+        if memory_instance is None or reasoning_instance is None:
             continue
+        try:
+            frame, result = _alert_queue.get_nowait()
+        except queue.Empty:
+            continue
+        try:
+            loop = asyncio.get_running_loop()
+            enriched = await loop.run_in_executor(
+                None, lambda f=frame, r=result: memory_instance.process(f, r)
+            )
+            reasoning = await loop.run_in_executor(
+                None,
+                lambda: reasoning_instance.analyze(
+                    enriched,
+                    enriched.get("similar_events", []),
+                    enriched.get("recurrence", 0),
+                ),
+            )
+            event = build_event(enriched, reasoning)
+            incident_log.appendleft(event)
+            await broadcast(event)
+        except Exception as e:
+            print(f"[Alert queue] {e}")
 
-        if latest_result:
-            latest_frame = pipeline_instance.annotate(frame.copy(), latest_result)
+
+async def motion_broadcast_loop():
+    """Sleep / wake UI from live zone-0 motion (neuromorphic gate)."""
+    last_sleep_mode = None
+    while True:
+        await asyncio.sleep(0.05)
+        s0 = camera_streams.get(0)
+        if s0 is None or s0.latest_raw is None:
+            continue
+        frame = s0.latest_raw
+        awake = event_gate.is_motion_event(frame)
+        if not awake:
+            if last_sleep_mode is not True:
+                await broadcast_system_state(True)
+                last_sleep_mode = True
         else:
-            latest_frame = frame
-
-        if processing_task is None or processing_task.done():
-            if processing_task is not None:
-                try:
-                    annotated, res, enriched, reasoning = processing_task.result()
-                    latest_result = res
-                    if res["is_anomaly"] and enriched and reasoning:
-                        if time.time() - last_alert_time > 1.0:
-                            last_alert_time = time.time()
-                            event = build_event(enriched, reasoning)
-                            incident_log.appendleft(event)
-                            asyncio.create_task(broadcast(event))
-                except Exception as e:
-                    print(f"[ML Error] {e}")
-
-            if not event_gate.is_motion_event(frame):
-                if last_sleep_mode != True:
-                    await broadcast_system_state(True)
-                    last_sleep_mode = True
-                await asyncio.sleep(0.03)
-                continue
-            
-            if last_sleep_mode != False:
+            if last_sleep_mode is not False:
                 await broadcast_system_state(False)
                 last_sleep_mode = False
-
-            processing_task = loop.run_in_executor(None, _process_frame, frame.copy())
-
-        await asyncio.sleep(0.03)
 
 
 async def simulated_loop():
@@ -733,27 +826,57 @@ async def demo_reset():
         connected_ws.remove(ws)
     return {"status": "ok", "message": "All zones and incidents cleared"}
 
-async def video_generator():
-    global latest_frame
-    _placeholder = np.zeros((360, 480, 3), dtype=np.uint8)
-    cv2.putText(_placeholder, "Camera initializing...", (70, 175),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (80, 80, 80), 2)
+def _mjpeg_placeholder(text: str = "Stream starting..."):
+    img = np.zeros((360, 480, 3), dtype=np.uint8)
+    cv2.putText(img, text, (48, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (88, 88, 96), 2)
+    return img
+
+
+def dynamic_video_generator(zone_id: int):
     while True:
-        frame = latest_frame if latest_frame is not None else _placeholder
-        ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        
-        if not ret:
-            await asyncio.sleep(0.05)
-            continue
-            
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        await asyncio.sleep(0.04)
+        stream = camera_streams.get(zone_id)
+        if stream is None or not stream.running:
+            frame = _mjpeg_placeholder("Stream offline")
+        elif stream.latest_frame is not None:
+            frame = stream.latest_frame
+        else:
+            frame = _mjpeg_placeholder()
+        ok, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
+            )
+        time.sleep(0.05)
+
+
+_MJPEG_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+}
+
+
+@app.get("/video_feed/{zone_id}")
+async def video_feed_zone(zone_id: int):
+    if zone_id not in camera_streams:
+        return Response(status_code=404)
+    return StreamingResponse(
+        dynamic_video_generator(zone_id),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers=_MJPEG_HEADERS,
+    )
+
 
 @app.get("/video_feed")
-async def video_feed():
-    return StreamingResponse(video_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+async def video_feed_legacy():
+    """Legacy single-feed URL → zone 0 (live webcam)."""
+    if 0 not in camera_streams:
+        return Response(status_code=503)
+    return StreamingResponse(
+        dynamic_video_generator(0),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers=_MJPEG_HEADERS,
+    )
 
 @app.websocket("/ws/alerts")
 async def websocket_endpoint(websocket: WebSocket):
@@ -768,13 +891,53 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in connected_ws:
             connected_ws.remove(websocket)
 
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+frontend_path = os.path.join(_ROOT_DIR, "frontend")
 static_path = os.path.join(frontend_path, "static")
-# Mount CCTV assets first so /static/*.mp4 is always served (not swallowed by SPA root)
+
+
+def _frontend_file(name: str) -> str:
+    return os.path.join(frontend_path, name)
+
+
+# ── Dashboard static files (never mount StaticFiles at "/" — it intercepts /video_feed/* ) ──
+@app.get("/")
+async def serve_dashboard():
+    p = _frontend_file("index.html")
+    if not os.path.isfile(p):
+        return Response(status_code=404, content="frontend/index.html missing")
+    return FileResponse(p)
+
+
+@app.get("/index.html")
+async def serve_dashboard_index():
+    return FileResponse(_frontend_file("index.html"))
+
+
+@app.get("/style.css")
+async def serve_style_css():
+    return FileResponse(_frontend_file("style.css"))
+
+
+@app.get("/app.js")
+async def serve_app_js_file():
+    return FileResponse(_frontend_file("app.js"))
+
+
+@app.get("/tv_display.html")
+async def serve_tv_display_html():
+    return FileResponse(_frontend_file("tv_display.html"))
+
+
+@app.get("/favicon.png")
+async def serve_favicon_png():
+    p = _frontend_file("favicon.png")
+    if os.path.isfile(p):
+        return FileResponse(p)
+    return Response(status_code=204)
+
+
 if os.path.isdir(static_path):
     app.mount("/static", StaticFiles(directory=static_path), name="cctv_static")
-if os.path.isdir(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 if __name__ == "__main__":
     import socket

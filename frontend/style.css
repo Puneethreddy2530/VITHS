@@ -883,51 +883,15 @@ body.alert-mode > *:not(.main-grid) {
 .cctv-matrix-card-head .video-header {
   margin-bottom: 8px;
 }
-.cctv-demo-toolbar {
-  display: flex;
+.cctv-matrix-video-header {
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
-  background: #0d0d14;
-  border: 1px solid #1e1e2a;
-  border-radius: 8px;
+  gap: 10px;
 }
-.cctv-demo-hint {
-  font-size: 10px;
-  color: #6b7280;
-  letter-spacing: 0.3px;
-}
-.cctv-demo-actions {
+.cctv-matrix-header-actions {
   display: flex;
-  gap: 8px;
-}
-.cctv-demo-btn {
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: 1px solid #34d399;
-  background: rgba(52, 211, 153, 0.12);
-  color: #6ee7b7;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.cctv-demo-btn:hover {
-  background: rgba(52, 211, 153, 0.22);
-  color: #a7f3d0;
-}
-.cctv-demo-btn-secondary {
-  border-color: #4b5563;
-  background: rgba(75, 85, 99, 0.2);
-  color: #d1d5db;
-}
-.cctv-demo-btn-secondary:hover {
-  border-color: #6b7280;
-  background: rgba(107, 114, 128, 0.25);
-  color: #f3f4f6;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .cctv-matrix {
@@ -991,4 +955,62 @@ body.alert-mode > *:not(.main-grid) {
 @keyframes cctv-flash {
   from { box-shadow: inset 0 0 10px rgba(239,68,68,0.3); }
   to { box-shadow: inset 0 0 40px rgba(239,68,68,0.8); }
+}
+
+/* ── Master Demo Controls ──────────────── */
+.demo-controls {
+  display: flex;
+  gap: 8px;
+}
+.demo-controls button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+.demo-controls button:hover {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: #34d399;
+}
+
+/* ── Simulated AI YOLO Overlays ──────────────── */
+.ai-bounding-layer {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.sim-bbox {
+  position: absolute;
+  border: 1.5px solid #34d399;
+  background: rgba(52, 211, 153, 0.05);
+  transition: all 0.5s ease-in-out;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.3);
+}
+.sim-bbox.threat {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+}
+.sim-bbox-label {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: #34d399;
+  color: #000;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 4px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.sim-bbox.threat .sim-bbox-label {
+  background: #ef4444;
+  color: #fff;
 }

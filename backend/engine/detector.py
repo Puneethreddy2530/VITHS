@@ -9,6 +9,7 @@ All pretrained from HuggingFace / ultralytics. No dataset needed.
 
 import cv2, time, math
 from collections import deque
+from dataclasses import dataclass, field
 import numpy as np
 from PIL import Image
 from datetime import datetime
@@ -26,7 +27,10 @@ IFOREST_EVERY   = 10    # run IForest every N frames
 WARMUP_FRAMES   = 50    # collect normal features before fitting IForest
 ANOMALY_THRESH  = 0.52  # CLIP anomaly probability threshold (tune this)
 IFOREST_THRESH  = -0.08 # IForest score threshold (more negative = more anomalous)
-CONFIDENCE_MIN  = 0.25  # minimum YOLO confidence
+CONFIDENCE_MIN  = 0.25  # minimum YOLO confidence (live webcam)
+# Pre-recorded CCTV files (zones 4, 7, 15): compression + motion blur cause false “person” at low conf
+FILE_FEED_ZONES = frozenset({4, 7, 15})
+PERSON_CONF_MIN_FILE = 0.52  # stricter for person class only on file streams
 
 # Physics-based thresholds (fluid dynamics on optical flow)
 DIV_THRESH      = 0.5   # divergence  > threshold → panic/scatter
@@ -64,6 +68,19 @@ ANOMALY_PROMPTS = [
 ALL_PROMPTS = NORMAL_PROMPTS + ANOMALY_PROMPTS
 
 
+@dataclass
+class _ZoneStreamState:
+    """Isolated temporal state per camera — required for multi-stream (shared Detector)."""
+
+    frame_count: int = 0
+    prev_gray: np.ndarray | None = None
+    mag_history: deque = field(default_factory=lambda: deque(maxlen=MAG_HISTORY_LEN))
+    last_yolo_dets: list = field(default_factory=list)
+    last_clip_score: float = 0.0
+    last_clip_label: str = ""
+    last_iforest_score: float = 0.0
+
+
 class Detector:
     def __init__(self):
         print("Loading models...")
@@ -96,17 +113,16 @@ class Detector:
         self.iforest_fitted  = False
         self.warmup_features = []
 
-        self.frame_count = 0
-        self.prev_gray   = None
-        self.mag_history = deque(maxlen=MAG_HISTORY_LEN)  # for Lyapunov
-
-        # Cache for skip frames
-        self.last_yolo_dets = []
-        self.last_clip_score = 0.0
-        self.last_clip_label = ""
-        self.last_iforest_score = 0.0
+        # Per-zone buffers so parallel CCTV streams do not share YOLO / flow / CLIP caches
+        self._zone: dict[int, _ZoneStreamState] = {}
 
         print("  All models loaded.\n")
+
+    def _zs(self, zone_id: int) -> _ZoneStreamState:
+        z = int(zone_id)
+        if z not in self._zone:
+            self._zone[z] = _ZoneStreamState()
+        return self._zone[z]
 
     # ── Optical flow features (5-dim) ─────────────────────────────
     def _flow_features_from_flow(self, flow):
@@ -200,20 +216,30 @@ class Detector:
         return float(self.iforest.decision_function([features])[0])
 
     # ── YOLO detections ───────────────────────────────────────────
-    def _yolo_detections(self, frame_bgr):
+    def _yolo_detections(self, frame_bgr, zone_id: int = 0):
         # Run YOLO on the native frame (480x360) for better detection confidence
-        results  = self.yolo(frame_bgr, verbose=False)[0]
+        results = self.yolo(frame_bgr, verbose=False)[0]
         detections = []
+        strict_person = int(zone_id) in FILE_FEED_ZONES
         for box in results.boxes:
             cls_id = int(box.cls[0])
-            conf   = float(box.conf[0])
-            if cls_id in WATCH_CLASSES and conf >= CONFIDENCE_MIN:
-                x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
-                detections.append({
-                    "class":      WATCH_CLASSES[cls_id],
-                    "confidence": round(conf, 3),
-                    "bbox":       [round(x1,1), round(y1,1), round(x2,1), round(y2,1)]
-                })
+            conf = float(box.conf[0])
+            if cls_id not in WATCH_CLASSES:
+                continue
+            label = WATCH_CLASSES[cls_id]
+            min_conf = (
+                PERSON_CONF_MIN_FILE
+                if strict_person and label == "person"
+                else CONFIDENCE_MIN
+            )
+            if conf < min_conf:
+                continue
+            x1, y1, x2, y2 = [float(v) for v in box.xyxy[0]]
+            detections.append({
+                "class": label,
+                "confidence": round(conf, 3),
+                "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
+            })
         return detections
 
     # ── Main process frame ─────────────────────────────────────────
@@ -222,45 +248,42 @@ class Detector:
         Call this every frame.
         Returns a detection result dict.
         """
-        self.frame_count += 1
-        fc = self.frame_count
+        zs = self._zs(zone_id)
+        zs.frame_count += 1
+        fc = zs.frame_count
 
-        resized  = cv2.resize(frame_bgr, (160, 120))
-        gray     = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        resized = cv2.resize(frame_bgr, (160, 120))
+        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY).astype(np.float32)
 
-        # Compute optical flow ONCE — reuse for features + physics
+        # Compute optical flow ONCE — reuse for features + physics (per zone)
         raw_flow = None
-        if self.prev_gray is not None:
+        if zs.prev_gray is not None:
             raw_flow = cv2.calcOpticalFlowFarneback(
-                self.prev_gray, gray, None,
+                zs.prev_gray, gray, None,
                 pyr_scale=0.5, levels=2, winsize=11,
                 iterations=2, poly_n=5, poly_sigma=1.2, flags=0
             )
-        self.prev_gray = gray  # store for next frame
+        zs.prev_gray = gray
 
-        # Extract features from the SAME flow (no recomputation)
         features = self._flow_features_from_flow(raw_flow)
+        zs.mag_history.append(float(features[0]))
 
-        # Track rolling magnitude for Lyapunov
-        self.mag_history.append(float(features[0]))
-
-        # Compute physics signals from the SAME flow
         if raw_flow is not None:
-            phys = self.physics_features(raw_flow, self.mag_history)
+            phys = self.physics_features(raw_flow, zs.mag_history)
         else:
             phys = {"divergence": 0.0, "curl": 0.0, "lyapunov": 0.0}
 
         if fc % YOLO_EVERY == 0:
-            self.last_yolo_dets = self._yolo_detections(frame_bgr)
-        yolo_dets = self.last_yolo_dets
+            zs.last_yolo_dets = self._yolo_detections(frame_bgr, zone_id)
+        yolo_dets = zs.last_yolo_dets
 
         if fc % CLIP_EVERY == 0:
-            self.last_clip_score, self.last_clip_label = self._clip_score(frame_bgr)
-        clip_score, clip_label = self.last_clip_score, self.last_clip_label
+            zs.last_clip_score, zs.last_clip_label = self._clip_score(frame_bgr)
+        clip_score, clip_label = zs.last_clip_score, zs.last_clip_label
 
         if fc % IFOREST_EVERY == 0:
-            self.last_iforest_score = self._iforest_score(features)
-        iforest_score = self.last_iforest_score
+            zs.last_iforest_score = self._iforest_score(features)
+        iforest_score = zs.last_iforest_score
 
         # ── Combine scores into unified anomaly decision ──────────
         is_anomaly = False
