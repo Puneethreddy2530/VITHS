@@ -4,9 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description"
-    content="PS-003 AI-powered intrusion monitoring system with quantum tracking, physics-based anomaly detection, and trajectory analysis" />
-  <title>PS-003 Intrusion Monitor</title>
+  <meta name="description" content="Live campus security monitoring" />
+  <title>Security Monitor</title>
   <link rel="icon" type="image/png" href="favicon.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -16,14 +15,14 @@
   <!-- ── HEADER ───────────────────────────────────────────────── -->
   <div class="header">
     <div class="header-title">
-      <h1>PS-003 Intrusion Monitor</h1>
-      <p class="header-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC · Trajectory Topology</p>
+      <h1>Security Monitor</h1>
+      <p class="header-sub">Live risk map · multi-camera · guard alerts</p>
     </div>
     <div class="header-right">
-      <div class="privacy-badge">🔐 Privacy 100% · No faces · PQC Signed</div>
+      <div class="privacy-badge">Privacy-safe · no facial ID</div>
       <div id="system-state">
         <span id="system-dot"></span>
-        <span id="system-label">Neuromorphic — idle</span>
+        <span id="system-label">Monitoring — standby</span>
       </div>
       <div class="status-pill">
         <span id="status-dot"></span>
@@ -34,38 +33,38 @@
 
   <!-- ── TV WALL DISPLAYS (opens tv_display.html; per-floor query ?floor=N) ── -->
   <div class="tv-display-bar" id="tv-display-bar">
-    <span class="tv-display-bar-label">Wall display</span>
-    <a class="tv-display-main-link" id="tv-link-command" href="tv_display.html" target="_blank" rel="noopener noreferrer">Command · all floors</a>
+    <span class="tv-display-bar-label">Big screen</span>
+    <a class="tv-display-main-link" id="tv-link-command" href="tv_display.html" target="_blank" rel="noopener noreferrer">All floors</a>
     <span class="tv-display-bar-sep" aria-hidden="true">·</span>
-    <span class="tv-display-bar-sublabel">Floor TVs</span>
+    <span class="tv-display-bar-sublabel">One floor</span>
     <div class="tv-floor-chips" id="tv-floor-chips"></div>
   </div>
 
   <!-- ── FEATURE SHOWCASE STRIP ───────────────────────────────── -->
   <div class="feature-strip" id="feature-strip">
     <div class="feature-pill" id="pill-flow">
-      <span class="pill-icon">⚛</span>
-      <span>Optical Flow</span>
+      <span class="pill-icon">◎</span>
+      <span>Motion</span>
     </div>
     <div class="feature-pill" id="pill-divcurl">
       <span class="pill-icon">〜</span>
-      <span>Div/Curl</span>
+      <span>Crowd spread</span>
     </div>
     <div class="feature-pill" id="pill-lyapunov">
       <span class="pill-icon">λ</span>
-      <span>Lyapunov</span>
+      <span>Stability</span>
     </div>
     <div class="feature-pill" id="pill-quantum">
-      <span class="pill-icon">ψ</span>
-      <span>Quantum</span>
+      <span class="pill-icon">◎</span>
+      <span>Tracker</span>
     </div>
     <div class="feature-pill" id="pill-clip">
       <span class="pill-icon">🧠</span>
-      <span>CLIP Semantic</span>
+      <span>Scene AI</span>
     </div>
     <div class="feature-pill" id="pill-trajectory">
       <span class="pill-icon">🗺</span>
-      <span>Trajectory</span>
+      <span>Path</span>
     </div>
   </div>
 
@@ -85,7 +84,7 @@
     </div>
     <div class="stat-card" style="--accent:#f59e0b">
       <div class="stat-value" id="stat-clip" style="color:#f59e0b">0.00</div>
-      <div class="stat-label">Avg CLIP Score</div>
+      <div class="stat-label">AI signal</div>
     </div>
     <div class="stat-card" style="--accent:#ec4899">
       <div class="stat-value" id="stat-patterns" style="color:#ec4899">0</div>
@@ -101,17 +100,16 @@
   <div class="card cctv-matrix-card" style="padding: 12px;">
     <div class="cctv-matrix-card-head">
       <div class="video-header cctv-matrix-video-header">
-        <span class="card-title" style="margin:0">Command Center Multi-Feed Matrix</span>
+        <span class="card-title" style="margin:0">Cameras</span>
         <div class="cctv-matrix-header-actions">
-          <span class="demo-feed-badge" title="Disclosure for judges / demo">DEMO · file-backed CCTV</span>
-          <span class="on-air">● SYSTEM ACTIVE</span>
+          <span class="on-air">● Live</span>
         </div>
       </div>
     </div>
     <div class="cctv-matrix" id="cctv-matrix-root">
       <div class="cctv-feed" id="cctv-0" data-stream-zone="0">
         <div class="cctv-overlay">
-          <span class="cctv-label"><strong>Z0</strong> stream · LIVE · primary <strong>Gate</strong> arc on <strong>B</strong> grid</span>
+          <span class="cctv-label">Live — patrol</span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -127,7 +125,7 @@
 
       <div class="cctv-feed" id="cctv-4" data-stream-zone="4">
         <div class="cctv-overlay">
-          <span class="cctv-label">DEMO <strong>Z4</strong> = <strong>B4</strong> cell · <code>cctv_corridor.mp4</code></span>
+          <span class="cctv-label">Sample — corridor</span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -143,7 +141,7 @@
 
       <div class="cctv-feed" id="cctv-15" data-stream-zone="15">
         <div class="cctv-overlay">
-          <span class="cctv-label">DEMO <strong>Z15</strong> = <strong>B15</strong> cell · <code>cctv_gate.mp4</code></span>
+          <span class="cctv-label">Sample — gate</span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -159,7 +157,7 @@
 
       <div class="cctv-feed" id="cctv-7" data-stream-zone="7">
         <div class="cctv-overlay">
-          <span class="cctv-label">DEMO <strong>Z7</strong> = <strong>B7</strong> cell · <code>cctv_parking.mp4</code></span>
+          <span class="cctv-label">Sample — parking</span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -173,22 +171,131 @@
         </div>
       </div>
     </div>
-    <p class="cctv-demo-disclosure" id="cctv-demo-disclosure">
-      <strong>Demo disclosure — <span class="bz-key"><strong>B</strong> = hostel hex</span> · <span class="bz-key"><strong>Z</strong> = command-center stream</span>:</strong>
-      The <em>heatmap</em> tints polygons labeled <strong>Gate, B1…B15</strong> on the D1 plan (detection / ST-GCN / ψ).
-      The <em>2×2 wall</em> shows four <strong>Z</strong> feeds: <strong>Z0</strong> live webcam (or placeholder), and three packaged loops in <code>frontend/static/</code>:
-      <strong>Z4</strong>→<code>cctv_corridor.mp4</code> (same index as grid <strong>B4</strong>),
-      <strong>Z7</strong>→<code>cctv_parking.mp4</code> (<strong>B7</strong>),
-      <strong>Z15</strong>→<code>cctv_gate.mp4</code> (<strong>B15</strong>).
-      Any alert on a <strong>B</strong> cell still routes the red tile flash to the <strong>nearest Z</strong> along the security ring (so e.g. <strong>Gate</strong> may light <strong>Z15</strong> gate footage one hop away).
-      Same runtime pipeline as production; labels separate plan (<strong>B</strong>) from encoders (<strong>Z</strong>).
-    </p>
   </div>
+
+  <!-- ── LAYER 1 PHYSICS SHOWCASE — between camera wall & risk map ── -->
+  <section class="layer1-showcase layer1-showcase--after-cctv" aria-labelledby="layer1-title">
+    <div class="layer1-showcase__glow" aria-hidden="true"></div>
+    <header class="layer1-showcase__header">
+      <p class="layer1-eyebrow"><span class="layer1-eyebrow__dot"></span> Layer 1 · Physics</p>
+      <h2 id="layer1-title" class="layer1-title">High density vs. high chaos <span class="layer1-title__accent">(the Lyapunov fix)</span></h2>
+      <p class="layer1-lead">
+        Classic <strong>optical flow</strong> fires when aggregate motion <span class="layer1-math">Σ<strong>v</strong></span> is high — so orderly attendance queues look like incidents.
+        The goal is to split <strong class="layer1-hl density">density</strong> from <strong class="layer1-hl chaos">chaos</strong> using a <strong>Lyapunov</strong> stability readout <span class="layer1-math">λ</span> plus field geometry <span class="layer1-math">∇·<strong>F</strong> + ∇×<strong>F</strong></span> (divergence &amp; curl).
+      </p>
+    </header>
+
+    <div class="layer1-dual">
+      <figure class="layer1-film layer1-film--calm">
+        <div class="layer1-film__frame">
+          <video class="layer1-video" src="/static/layer1_queue_demo.mp4" muted loop playsinline preload="metadata"
+            aria-label="Demo: structured queue motion — high flow, low chaos"></video>
+          <div class="layer1-film__scan" aria-hidden="true"></div>
+          <div class="layer1-mini-phys layer1-mini-phys--calm" aria-hidden="true">
+            <span class="layer1-mini-phys__title">Typical field</span>
+            <span class="layer1-mini-line"><abbr title="Divergence">∇·F</abbr> low · spread uniform</span>
+            <span class="layer1-mini-line"><abbr title="Curl">∇×F</abbr> low · little swirl</span>
+            <span class="layer1-mini-line"><span class="layer1-math">λ</span> ≤ 0 · stable</span>
+            <span class="layer1-mini-line">Σ<strong>v</strong> can be high</span>
+          </div>
+          <canvas class="layer1-face-canvas" width="640" height="360" aria-hidden="true"></canvas>
+        </div>
+        <figcaption class="layer1-film__cap">
+          <span class="layer1-film__tag layer1-film__tag--ok">Structured</span>
+          <span class="layer1-film__label">Dense, aligned flow</span>
+          <span class="layer1-film__hint">Vectors line up · λ ≤ 0</span>
+        </figcaption>
+      </figure>
+      <figure class="layer1-film layer1-film--chaos">
+        <div class="layer1-film__frame">
+          <video class="layer1-video" src="/static/layer1_chaos_demo.mp4" muted loop playsinline preload="metadata"
+            aria-label="Demo: chaotic crowd motion — diverging directions (60 fps source)"></video>
+          <div class="layer1-film__scan layer1-film__scan--alert" aria-hidden="true"></div>
+          <div class="layer1-mini-phys layer1-mini-phys--chaos" aria-hidden="true">
+            <span class="layer1-mini-phys__title">Typical field</span>
+            <span class="layer1-mini-line"><abbr title="Divergence">∇·F</abbr> high · vectors scatter</span>
+            <span class="layer1-mini-line"><abbr title="Curl">∇×F</abbr> high · swirl / clash</span>
+            <span class="layer1-mini-line"><span class="layer1-math">λ</span> &gt; 0 · chaotic</span>
+            <span class="layer1-mini-line">Σ<strong>v</strong> + structure break</span>
+          </div>
+          <canvas class="layer1-face-canvas" width="640" height="360" aria-hidden="true"></canvas>
+        </div>
+        <figcaption class="layer1-film__cap">
+          <span class="layer1-film__tag layer1-film__tag--alert">Chaotic</span>
+          <span class="layer1-film__label">Dense + divergent</span>
+          <span class="layer1-film__hint">Vectors scatter · λ &gt; 0</span>
+        </figcaption>
+      </figure>
+    </div>
+
+    <div class="layer1-physics-hud" id="layer1-physics-hud" aria-label="Live physics from pipeline">
+      <div class="layer1-phys-hud-head">
+        <span class="layer1-phys-hud-title">Live motion field</span>
+        <span class="layer1-phys-hud-sub">∇·F · ∇×F · λ · optical flow — same signals as the panel below</span>
+      </div>
+      <div class="layer1-phys-hud-grid">
+        <div class="layer1-phys-tile">
+          <span class="layer1-phys-tile-k">∇·F</span>
+          <span class="layer1-phys-tile-n">divergence</span>
+          <span class="layer1-phys-tile-val" id="layer1-phys-div">—</span>
+          <span class="layer1-phys-tile-tag" id="layer1-phys-div-tag"></span>
+        </div>
+        <div class="layer1-phys-tile">
+          <span class="layer1-phys-tile-k">∇×F</span>
+          <span class="layer1-phys-tile-n">curl</span>
+          <span class="layer1-phys-tile-val" id="layer1-phys-curl">—</span>
+          <span class="layer1-phys-tile-tag" id="layer1-phys-curl-tag"></span>
+        </div>
+        <div class="layer1-phys-tile">
+          <span class="layer1-phys-tile-k">λ</span>
+          <span class="layer1-phys-tile-n">Lyapunov</span>
+          <span class="layer1-phys-tile-val" id="layer1-phys-lyap">—</span>
+          <span class="layer1-phys-tile-tag" id="layer1-phys-lyap-tag"></span>
+        </div>
+        <div class="layer1-phys-tile">
+          <span class="layer1-phys-tile-k">|v|</span>
+          <span class="layer1-phys-tile-n">optical flow</span>
+          <span class="layer1-phys-tile-val" id="layer1-phys-flow">—</span>
+          <span class="layer1-phys-tile-tag" id="layer1-phys-flow-tag"></span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="layer1-bullets">
+      <li class="layer1-bullet">
+        <span class="layer1-bullet__icon" aria-hidden="true">◇</span>
+        A line toward check-in is <strong>dense but structured</strong>. A fight or panic is <strong>dense <em>and</em> chaotic</strong> — same pixel energy, different physics.
+      </li>
+      <li class="layer1-bullet">
+        <span class="layer1-bullet__icon" aria-hidden="true">λ</span>
+        During sensitive windows, weight <strong>Lyapunov <span class="layer1-math">λ</span></strong> alongside raw flow: uniform fields keep <span class="layer1-math">λ</span> near zero or negative; divergence in direction drives <span class="layer1-math">λ &gt; 0</span>.
+      </li>
+    </ul>
+
+    <div class="layer1-cases">
+      <div class="layer1-case layer1-case--safe">
+        <div class="layer1-case__head">
+          <span class="layer1-case__id">Case A</span>
+          <span class="layer1-case__badge layer1-case__badge--safe">No alert</span>
+        </div>
+        <p class="layer1-case__body">Queue intact: optical flow high, <strong>∇·F</strong> and <strong>∇×F</strong> stay uniform → <span class="layer1-math">λ ≤ 0</span>. <strong class="layer1-result">Result: no alert.</strong></p>
+      </div>
+      <div class="layer1-case layer1-case--alert">
+        <div class="layer1-case__head">
+          <span class="layer1-case__id">Case B</span>
+          <span class="layer1-case__badge layer1-case__badge--alert">Alert</span>
+        </div>
+        <p class="layer1-case__body">Frantic breakout: motion vectors <strong>diverge</strong> → <span class="layer1-math">λ &gt; 0</span>. <strong class="layer1-result">Result: alert triggered.</strong></p>
+      </div>
+    </div>
+
+    <p class="layer1-foot">BlazeFace boxes are on-device on these clips (no upload). Numbers in <strong>Live motion field</strong> mirror the live pipeline / WebSocket; run a demo scenario to see them move.</p>
+  </section>
 
   <!-- ── MAIN CONTENT: Z-axis floor selector + dashboard ───────── -->
   <div class="main-content">
     <aside class="floor-selector" id="floor-selector">
-      <div class="floor-header">Z-AXIS</div>
+      <div class="floor-header">Floor</div>
       <div class="floor-buttons" id="floor-buttons-container">
       </div>
     </aside>
@@ -198,8 +305,8 @@
     <!-- Hostel SVG Heatmap -->
     <div class="card svg-map-card">
       <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span>D1 Block — Hex ring (B1/B2 &amp; B9/B10 doubled, wall-aligned)</span>
-        <span id="quantum-state-badge" style="font-size:10px; color:#666;">ψ idle</span>
+        <span>Risk map — D1 block</span>
+        <span id="quantum-state-badge" style="font-size:10px; color:#666;">Idle</span>
       </div>
       <div class="svg-map-container" id="svg-map-container">
         <canvas id="pixel-heatmap" width="1000" height="900"></canvas>
@@ -254,34 +361,22 @@
         <span><span class="legend-swatch" style="background:#34d399"></span>LOW</span>
         <span><span class="legend-swatch" style="background:#f59e0b"></span>MEDIUM</span>
         <span><span class="legend-swatch" style="background:#ef4444"></span>HIGH</span>
-        <span style="margin-left:auto; font-size:9px; color:#555;">▲ = optimal camera (AQHSO plan) · ψ = quantum probability</span>
+        <span style="margin-left:auto; font-size:9px; color:#555;">▲ planned camera</span>
       </div>
-      <p class="map-demo-feed-note">
-        <strong>Heatmap mapping:</strong> colors follow <strong>Gate / B1–B15</strong> (hostel grid). Incident routing to video uses stream indices <strong>Z0, Z4, Z7, Z15</strong>:
-        each <strong>B</strong> alert highlights the <em>nearest</em> <strong>Z</strong> tile (ring adjacency).
-        Demo files align on index: <strong>B4↔Z4</strong> <code>cctv_corridor.mp4</code>, <strong>B7↔Z7</strong> <code>cctv_parking.mp4</code>, <strong>B15↔Z15</strong> <code>cctv_gate.mp4</code>; <strong>Gate (B id 0)↔Z0</strong> live.
-      </p>
     </div>
 
-    <!-- AQHSO: offline placement + what runtime does -->
     <div class="card aqhso-info-card">
-      <div class="card-title">AQHSO &amp; camera placement</div>
-      <p class="aqhso-lead">
-        <strong>AQHSO</strong> (adaptive quantum-inspired search) is used in <em>two</em> ways here:
-        (1) <strong>Planning</strong> — a one-time run places a small set of cameras on the 16-zone grid to minimise coverage error while biasing toward doors/anchors.
-        (2) <strong>Live pipeline</strong> — an AQHSO-style <strong>adaptive threshold</strong> tightens or loosens CLIP / Isolation Forest cutoffs (e.g. after quiet periods or at night) so alerts stay calibrated.
-      </p>
-      <p id="aqhso-placement-status" class="aqhso-status">Loading placement data…</p>
+      <div class="card-title">Camera coverage plan</div>
+      <p id="aqhso-placement-status" class="aqhso-status">Loading…</p>
       <p id="aqhso-grid-meta" class="aqhso-meta"></p>
       <details class="aqhso-details">
-        <summary>Optimal camera → zone list</summary>
+        <summary>Camera list</summary>
         <ul id="aqhso-cam-list" class="aqhso-cam-list"></ul>
       </details>
     </div>
 
-    <!-- Latest alert card -->
-    <div class="card">
-      <div class="card-title">Latest Alert — AI Analysis</div>
+    <div class="card guard-alert-card">
+      <div class="card-title">Alert for response team</div>
       <div id="alert-card">
         <p class="alert-waiting">Waiting for events...</p>
       </div>
@@ -293,7 +388,7 @@
 
   <!-- ── EVENT FEED ─────────────────────────────────────────────── -->
   <div class="card">
-    <div class="card-title">Incident Feed — PQC Signed</div>
+    <div class="card-title">Activity log</div>
     <div class="feed-scroll" id="event-feed">
       <p class="feed-empty" id="feed-empty">No events yet</p>
     </div>
@@ -304,7 +399,7 @@
 
     <!-- Physics Readout Panel -->
     <div class="panel" id="physics-panel">
-      <div class="panel-title">Physics Engine — real-time</div>
+      <div class="panel-title">Crowd motion signals</div>
       <div class="physics-row">
         <span class="phys-label">Divergence</span>
         <span class="phys-value" id="phys-div">—</span>
@@ -329,7 +424,7 @@
 
     <!-- Trajectory topology panel -->
     <div class="panel" id="trajectory-panel">
-      <div class="panel-title">Trajectory Topology — Mule Detection</div>
+      <div class="panel-title">Movement pattern</div>
       <div class="traj-row">
         <span class="traj-label">Path Entropy</span>
         <div class="traj-bar-wrap">
@@ -365,11 +460,11 @@
   <!-- ── LIVE FEED — physics overlay ──────────────────────────── -->
   <div style="margin-top:16px;">
     <div class="panel">
-      <div class="panel-title">Live Feed — physics overlay <span class="demo-feed-inline">(<strong>Z0</strong> stream = matrix top-left · live · ties to <strong>Gate</strong> on <strong>B</strong> grid)</span></div>
+      <div class="panel-title">Main camera</div>
       <img id="video-feed" src="/video_feed/0" style="width:100%; border-radius:8px; display:block;"
         onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed/0?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
       <div style="font-size:10px; color:#444; margin-top:6px;">
-        Divergence · Curl · Lyapunov · No facial recognition
+        Same feed as top-left tile · no facial recognition
       </div>
     </div>
   </div>
@@ -377,33 +472,35 @@
   <!-- ── DEMO CONTROLS ────────────────────────────────────────── -->
   <div class="panel demo-panel">
     <div class="demo-header" onclick="toggleDemoPanel()">
-      <div class="panel-title">Demo Controls — Judge Demo</div>
-      <span class="demo-toggle" id="demo-toggle">▼</span>
+      <div class="panel-title">Try sample scenarios</div>
+      <span class="demo-toggle" id="demo-toggle">▶</span>
     </div>
-    <div class="demo-body" id="demo-body">
+    <div class="demo-body collapsed" id="demo-body">
       <button type="button" class="demo-btn" style="border-color:#34d399; color:#34d399;" onclick="runScenario('faiss_memory', this)">
-        🧠 Inject FAISS Memory Loop
+        Past incident recall
       </button>
       <button type="button" class="demo-btn" style="border-color:#c4b5fd; color:#c4b5fd;" onclick="runScenario('quantum_diffusion', this)">
-        ψ Trigger Quantum Tracker
+        Multi-zone tracking
       </button>
       <button type="button" class="demo-btn" style="border-color:#f9a8d4; color:#f9a8d4;" onclick="runScenario('trajectory_mule', this)">
-        🗺 Inject Mule Trajectory
+        Suspicious path
       </button>
       <button type="button" class="demo-btn" style="border-color:#fca5a5; color:#fca5a5;" onclick="runScenario('physics_chaos', this)">
-        〜 Trigger Physics Chaos (Fight)
+        Crowd commotion
       </button>
 
       <button type="button" class="demo-btn btn-warning" id="tamper-btn" onclick="runTamperDemo()">
-        🔐 Run PQC Tamper Demo
+        Alert integrity check
       </button>
       <button type="button" class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
-        🔄 Reset All Data
+        Reset all
       </button>
       <div class="demo-result" id="tamper-result" style="grid-column: 1 / -1; margin-top: 5px;"></div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js" crossorigin="anonymous"></script>
   <script src="app.js"></script>
 </body>
 

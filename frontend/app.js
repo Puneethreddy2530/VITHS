@@ -27,6 +27,10 @@ let _zoneBehaviors = {};
 let currentFloor = 1; // Default to Ground / Floor 1
 const TOTAL_FLOORS = 16;
 
+/** Layer 1 demo: BlazeFace model load + rAF loop id */
+let _layer1BlazeLoadPromise = null;
+let _layer1FaceRafId = null;
+
 /**
  * Map F*_Z* suffix to SVG zone index 0..15.
  * Z1..Z16 = blocks B1..Gate (1-based, matches mobile zoneNumber = backend+1).
@@ -594,7 +598,9 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
   const badge = document.getElementById('quantum-state-badge');
   if (badge) {
     const colors = { tracking:'#34d399', diffusing:'#f98c0a', collapsed:'#e35933', idle:'#555' };
-    badge.textContent = `ψ ${quantumState || 'idle'} · H=${(quantumEntropy || 0).toFixed(2)}`;
+    const labels = { tracking: 'Tracking', diffusing: 'Spreading', collapsed: 'Locked', idle: 'Idle' };
+    const lab = labels[quantumState] || 'Idle';
+    badge.textContent = lab;
     badge.style.color = colors[quantumState] || '#666';
     if (quantumState === 'diffusing') {
       badge.style.textShadow = "0 0 10px rgba(249, 140, 10, 0.6)";
@@ -614,13 +620,13 @@ function renderAqhsoInsights(data) {
   if (!statusEl) return;
 
   if (!data) {
-    statusEl.innerHTML = '<span class="aqhso-warn">Could not load <code>/aqhso/placements</code> (network or server).</span>';
+    statusEl.textContent = 'Coverage plan unavailable.';
     if (listEl) listEl.innerHTML = '';
     if (gridEl) gridEl.textContent = '';
     return;
   }
   if (data.error) {
-    statusEl.innerHTML = `<span class="aqhso-warn">${esc(data.error)} — run <code>python scripts/aqhso_grid.py</code> from the project root to generate <code>outputs/optimal_placements.json</code>.</span>`;
+    statusEl.textContent = 'No coverage file — map still works; ▲ markers optional.';
     if (listEl) listEl.innerHTML = '';
     if (gridEl) gridEl.textContent = '';
     return;
@@ -628,29 +634,22 @@ function renderAqhsoInsights(data) {
 
   const ba = data.block_assignments;
   if (!Array.isArray(ba) || ba.length === 0) {
-    statusEl.textContent = 'Placement file loaded but no cameras listed.';
+    statusEl.textContent = 'No cameras listed in plan file.';
     if (listEl) listEl.innerHTML = '';
     if (gridEl) gridEl.textContent = '';
     return;
   }
 
-  const err = data.coverage_error_m != null ? Number(data.coverage_error_m).toFixed(3) : '—';
-  const g = data.grid || {};
-  const gw = g.width ?? '—';
-  const gh = g.height ?? '—';
-  const bm = g.block_size_m ?? '—';
-  statusEl.textContent = `${ba.length} optimal cameras loaded · planning metric (coverage error) = ${err} m`;
-  if (gridEl) {
-    gridEl.textContent = `Planner grid: ${gw}×${gh} blocks × ${bm} m/block (same zone IDs 0–15 as this map; ▲ marks AQHSO picks).`;
-  }
+  const err = data.coverage_error_m != null ? Number(data.coverage_error_m).toFixed(2) : '—';
+  statusEl.textContent = `${ba.length} planned cameras · coverage fit ≈ ${err} m`;
+  if (gridEl) gridEl.textContent = '▲ on the map = planned camera positions.';
+
   if (listEl) {
     listEl.innerHTML = ba.map((b) => {
       const def = ZONE_DEFS.find(z => z.id === b.zone_id);
       const label = def ? def.label : `Zone ${b.zone_id}`;
       const cid = (b.cam_id != null ? b.cam_id : 0) + 1;
-      const xm = b.x_m != null ? Number(b.x_m).toFixed(1) : '—';
-      const ym = b.y_m != null ? Number(b.y_m).toFixed(1) : '—';
-      return `<li><strong>Camera ${cid}</strong> → <strong>${esc(label)}</strong> <span class="muted">(zone id ${b.zone_id} · ${xm} m, ${ym} m)</span></li>`;
+      return `<li><strong>Camera ${cid}</strong> → <strong>${esc(label)}</strong></li>`;
     }).join('');
   }
 }
@@ -703,16 +702,14 @@ function updateTrajectoryPath(evt) {
 function showTooltip(e, zoneDef) {
   const tt = document.getElementById('map-tooltip');
   const st = _zoneState[zoneDef.id] || {};
-  document.getElementById('tt-zone').textContent = `Grid ${zoneDef.label} (${zoneDef.cat}) · B face`;
+  document.getElementById('tt-zone').textContent = `${zoneDef.label}`;
   document.getElementById('tt-risk').textContent = `Risk: ${st.risk || 'LOW'}`;
   document.getElementById('tt-risk').style.color = RISK_COLOR[st.risk] || '#34d399';
-  document.getElementById('tt-behavior').textContent = st.behavior ? `Behavior: ${st.behavior}` : '';
-  document.getElementById('tt-score').textContent = `Score: ${(st.score || 0).toFixed(3)}${st.psi > 0.01 ? ` · ψ ${st.psi.toFixed(2)}` : ''}`;
+  document.getElementById('tt-behavior').textContent = st.behavior ? `Activity: ${st.behavior}` : '';
+  document.getElementById('tt-score').textContent = `Intensity ${(st.score || 0).toFixed(2)}`;
   const aqh = document.getElementById('tt-aqhso');
   if (aqh) {
-    aqh.textContent = _placements[zoneDef.id]
-      ? '▲ AQHSO optimal camera — this zone is in the placement plan'
-      : '';
+    aqh.textContent = _placements[zoneDef.id] ? '▲ Planned camera here' : '';
   }
   tt.style.display = 'block';
   moveTooltip(e);
@@ -855,6 +852,47 @@ function updatePhysics(evt) {
   if (flowTag) {
     flowTag.textContent = flow > 4.5 ? 'FAST' : flow > 2.0 ? 'MOTION' : 'quiet';
     flowTag.style.color = flow > 2.0 ? '#c4b5fd' : '#555';
+  }
+
+  const l1div = document.getElementById('layer1-phys-div');
+  const l1curl = document.getElementById('layer1-phys-curl');
+  const l1lyap = document.getElementById('layer1-phys-lyap');
+  const l1flow = document.getElementById('layer1-phys-flow');
+  const l1divT = document.getElementById('layer1-phys-div-tag');
+  const l1curlT = document.getElementById('layer1-phys-curl-tag');
+  const l1lyapT = document.getElementById('layer1-phys-lyap-tag');
+  const l1flowT = document.getElementById('layer1-phys-flow-tag');
+  if (l1div) {
+    l1div.textContent = div.toFixed(4);
+    l1div.style.color = Math.abs(div) > 0.3 ? '#fca5a5' : '#a1a1aa';
+  }
+  if (l1curl) {
+    l1curl.textContent = curl.toFixed(4);
+    l1curl.style.color = Math.abs(curl) > 0.3 ? '#fca5a5' : '#a1a1aa';
+  }
+  if (l1lyap) {
+    l1lyap.textContent = lyap.toFixed(4);
+    l1lyap.style.color = lyap > 0 ? '#fca5a5' : '#34d399';
+  }
+  if (l1flow) {
+    l1flow.textContent = flow.toFixed(3);
+    l1flow.style.color = flow > 2.0 ? '#c4b5fd' : '#a1a1aa';
+  }
+  if (l1divT) {
+    l1divT.textContent = Math.abs(div) > 0.5 ? 'SCATTER' : Math.abs(div) > 0.3 ? 'ANOMALY' : 'normal';
+    l1divT.style.color = Math.abs(div) > 0.3 ? '#fca5a5' : '#555';
+  }
+  if (l1curlT) {
+    l1curlT.textContent = Math.abs(curl) > 0.5 ? 'FIGHT' : Math.abs(curl) > 0.3 ? 'ANOMALY' : 'normal';
+    l1curlT.style.color = Math.abs(curl) > 0.3 ? '#fca5a5' : '#555';
+  }
+  if (l1lyapT) {
+    l1lyapT.textContent = lyap > 0 ? 'CHAOTIC' : 'stable';
+    l1lyapT.style.color = lyap > 0 ? '#fca5a5' : '#555';
+  }
+  if (l1flowT) {
+    l1flowT.textContent = flow > 4.5 ? 'FAST' : flow > 2.0 ? 'MOTION' : 'quiet';
+    l1flowT.style.color = flow > 2.0 ? '#c4b5fd' : '#555';
   }
 }
 
@@ -1082,7 +1120,7 @@ function updateSystemBadge(isSleeping) {
   const dot = document.getElementById('system-dot');
   const lbl = document.getElementById('system-label');
   if (dot) dot.style.background = isSleeping ? '#f59e0b' : '#34d399';
-  if (lbl) lbl.textContent = 'Neuromorphic — ' + (isSleeping ? 'sleep' : 'active');
+  if (lbl) lbl.textContent = isSleeping ? 'Monitoring — standby' : 'Monitoring — active';
 }
 
 /* ── Stats poller with count-up animation ──────────────────── */
@@ -1268,15 +1306,14 @@ function runTamperDemo() {
     .then(r => r.json())
     .then(d => {
       result.innerHTML =
-        `<span style="color:#34d399">✅ Original: ${d.original?.valid ? 'VALID' : 'INVALID'}</span> ` +
-        `<span style="color:#ef4444">❌ Tampered: ${d.tampered?.valid ? 'VALID' : 'REJECTED'}</span> ` +
-        `<span style="color:#555">Sig: ${esc(d.signature)}</span>`;
-      btn.textContent = '🔐 Run Tamper Demo';
+        `<span style="color:#34d399">Real alert: ${d.original?.valid ? 'trusted' : 'failed'}</span> · ` +
+        `<span style="color:#ef4444">Edited alert: ${d.tampered?.valid ? 'wrong' : 'blocked'}</span>`;
+      btn.textContent = 'Alert integrity check';
       btn.disabled = false;
     })
     .catch(() => {
-      result.innerHTML = '<span style="color:#ef4444">❌ Backend unreachable</span>';
-      btn.textContent = '🔐 Run Tamper Demo';
+      result.innerHTML = '<span style="color:#ef4444">Could not reach server</span>';
+      btn.textContent = 'Alert integrity check';
       btn.disabled = false;
     });
 }
@@ -1290,11 +1327,11 @@ function resetAllZones() {
     .then(() => {
       btn.textContent = '✅ Reset!';
       handleSystemReset();
-      setTimeout(() => { btn.textContent = '🔄 Reset All Data'; btn.disabled = false; }, 2000);
+      setTimeout(() => { btn.textContent = 'Reset all'; btn.disabled = false; }, 2000);
     })
     .catch(() => {
       btn.textContent = '❌ Failed';
-      setTimeout(() => { btn.textContent = '🔄 Reset All Data'; btn.disabled = false; }, 2000);
+      setTimeout(() => { btn.textContent = 'Reset all'; btn.disabled = false; }, 2000);
     });
 }
 
@@ -1309,7 +1346,7 @@ function wireTvDisplayConnections() {
   const main = document.getElementById('tv-link-command');
   if (main) {
     main.href = getTvDisplayUrl(null);
-    main.title = 'Fullscreen command display — all floors (same WebSocket feed)';
+    main.title = 'Open fullscreen view — all floors';
   }
   const chips = document.getElementById('tv-floor-chips');
   if (!chips) return;
@@ -1321,7 +1358,7 @@ function wireTvDisplayConnections() {
     a.href = getTvDisplayUrl(f);
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.title = `Wall display locked to floor ${f} only`;
+    a.title = `Floor ${f} only`;
     chips.appendChild(a);
   }
 }
@@ -1352,7 +1389,7 @@ function buildFloorSelector() {
       btn.classList.add('active');
 
       const title = document.querySelector('.header-title h1');
-      if (title) title.textContent = `PS-003 INTRUSION MONITOR // LEVEL ${i}`;
+      if (title) title.textContent = `Security Monitor · Floor ${i}`;
 
       const canvas = document.getElementById('pixel-heatmap');
       if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
@@ -1380,7 +1417,190 @@ function buildFloorSelector() {
   }
 
   const title = document.querySelector('.header-title h1');
-  if (title) title.textContent = `PS-003 INTRUSION MONITOR // LEVEL ${currentFloor}`;
+  if (title) title.textContent = `Security Monitor · Floor ${currentFloor}`;
+}
+
+/** Map BlazeFace detections (video pixel space) to canvas coords under object-fit: cover. */
+function drawLayer1FaceBoxes(ctx, predictions, vw, vh, cw, ch, strokeStyle, fillStyle) {
+  const scale = Math.max(cw / vw, ch / vh);
+  const dispW = vw * scale;
+  const dispH = vh * scale;
+  const ox = (cw - dispW) / 2;
+  const oy = (ch - dispH) / 2;
+  const lw = Math.max(1.5, Math.min(cw, ch) / 260);
+  const fontPx = Math.max(9, Math.round(Math.min(cw, ch) / 52));
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.lineWidth = lw;
+  ctx.font = `600 ${fontPx}px 'JetBrains Mono', ui-monospace, monospace`;
+  const list = predictions || [];
+  for (let i = 0; i < list.length; i++) {
+    const pred = list[i];
+    let x1;
+    let y1;
+    let x2;
+    let y2;
+    const tl = pred.topLeft;
+    const br = pred.bottomRight;
+    if (tl != null && br != null) {
+      x1 = Array.isArray(tl) ? tl[0] : tl.x;
+      y1 = Array.isArray(tl) ? tl[1] : tl.y;
+      x2 = Array.isArray(br) ? br[0] : br.x;
+      y2 = Array.isArray(br) ? br[1] : br.y;
+    } else continue;
+    if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) continue;
+    const px = x1 * scale + ox;
+    const py = y1 * scale + oy;
+    const pw = (x2 - x1) * scale;
+    const ph = (y2 - y1) * scale;
+    ctx.fillStyle = fillStyle;
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = strokeStyle;
+    ctx.strokeRect(px, py, pw, ph);
+    ctx.fillStyle = strokeStyle;
+    ctx.fillText('FACE', px + 4, py + fontPx + 2);
+  }
+}
+
+function resizeLayer1FaceCanvas(frame, canvas) {
+  const r = frame.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width));
+  const h = Math.max(1, Math.round(r.height));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+}
+
+/** BlazeFace bounding boxes on Layer 1 demo videos (browser-only, no upload). */
+function wireLayer1FaceOverlays(root, videoList) {
+  const Blaze = typeof globalThis !== 'undefined' ? globalThis.blazeface : null;
+  if (!Blaze || typeof globalThis.tf === 'undefined') return;
+  if (root.dataset.layer1FaceLoop === '1') return;
+  root.dataset.layer1FaceLoop = '1';
+
+  const pairs = [];
+  for (let i = 0; i < videoList.length; i++) {
+    const video = videoList[i];
+    const frame = video.closest('.layer1-film__frame');
+    if (!frame) continue;
+    const canvas = frame.querySelector('.layer1-face-canvas');
+    if (!canvas) continue;
+    const calm = video.closest('.layer1-film--calm') != null;
+    pairs.push({
+      video,
+      canvas,
+      frame,
+      stroke: calm ? 'rgba(52, 211, 153, 0.96)' : 'rgba(252, 165, 165, 0.96)',
+      fill: calm ? 'rgba(52, 211, 153, 0.07)' : 'rgba(252, 165, 165, 0.09)',
+    });
+  }
+  if (!pairs.length) {
+    delete root.dataset.layer1FaceLoop;
+    return;
+  }
+
+  let sectionVisible = true;
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (let j = 0; j < entries.length; j++) {
+        const e = entries[j];
+        if (e.target === root) sectionVisible = e.isIntersecting;
+      }
+    }, { threshold: 0.06, rootMargin: '60px' });
+    io.observe(root);
+  }
+
+  if (!_layer1BlazeLoadPromise) {
+    _layer1BlazeLoadPromise = Blaze.load({ maxFaces: 28, scoreThreshold: 0.48 }).catch(() => null);
+  }
+
+  _layer1BlazeLoadPromise.then((model) => {
+    if (!model) {
+      delete root.dataset.layer1FaceLoop;
+      return;
+    }
+    if ('ResizeObserver' in window) {
+      const ro = new ResizeObserver(() => {
+        for (let k = 0; k < pairs.length; k++) {
+          resizeLayer1FaceCanvas(pairs[k].frame, pairs[k].canvas);
+        }
+      });
+      for (let k = 0; k < pairs.length; k++) ro.observe(pairs[k].frame);
+    }
+    for (let k = 0; k < pairs.length; k++) resizeLayer1FaceCanvas(pairs[k].frame, pairs[k].canvas);
+
+    let lastTick = 0;
+    const DET_MS = 200;
+
+    const runDetect = (p) => {
+      const v = p.video;
+      const ctx0 = p.canvas.getContext('2d');
+      if (v.paused || v.readyState < 2) {
+        if (ctx0) ctx0.clearRect(0, 0, p.canvas.width, p.canvas.height);
+        return;
+      }
+      const vw = v.videoWidth;
+      const vh = v.videoHeight;
+      if (!vw || !vh) return;
+      resizeLayer1FaceCanvas(p.frame, p.canvas);
+      model
+        .estimateFaces(v, false)
+        .then((preds) => {
+          const ctx = p.canvas.getContext('2d');
+          if (!ctx) return;
+          drawLayer1FaceBoxes(ctx, preds, vw, vh, p.canvas.width, p.canvas.height, p.stroke, p.fill);
+        })
+        .catch(() => {});
+    };
+
+    const loop = (t) => {
+      _layer1FaceRafId = requestAnimationFrame(loop);
+      if (!sectionVisible) {
+        for (let k = 0; k < pairs.length; k++) {
+          const c = pairs[k].canvas.getContext('2d');
+          if (c) c.clearRect(0, 0, pairs[k].canvas.width, pairs[k].canvas.height);
+        }
+        return;
+      }
+      if (t - lastTick < DET_MS) return;
+      lastTick = t;
+      for (let k = 0; k < pairs.length; k++) runDetect(pairs[k]);
+    };
+    _layer1FaceRafId = requestAnimationFrame(loop);
+  });
+}
+
+/** Layer 1 showcase: play demo clips when in view (saves CPU vs always-on autoplay). */
+function wireLayer1Showcase() {
+  const root = document.querySelector('.layer1-showcase');
+  if (!root) return;
+  const videos = root.querySelectorAll('video.layer1-video');
+  const tryPlay = (v) => {
+    try {
+      const p = v.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) { /* ignore */ }
+  };
+  if (!videos.length) return;
+  if (!('IntersectionObserver' in window)) {
+    videos.forEach(tryPlay);
+    wireLayer1FaceOverlays(root, Array.from(videos));
+    return;
+  }
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const v = e.target;
+        if (e.isIntersecting) tryPlay(v);
+        else try {
+          v.pause();
+        } catch (_) { /* ignore */ }
+      }
+    },
+    { threshold: 0.2, rootMargin: '0px 0px -8% 0px' }
+  );
+  videos.forEach((v) => io.observe(v));
+  wireLayer1FaceOverlays(root, Array.from(videos));
 }
 
 function initApp() {
@@ -1388,6 +1608,7 @@ function initApp() {
   buildFloorSelector();
   wireTvDisplayConnections();
   wireCctvToolbar();
+  wireLayer1Showcase();
   loadInitialData();
   connect();
   setInterval(pollStats, 3000);
