@@ -312,13 +312,124 @@ async def camera_loop():
 
 
 async def simulated_loop():
-    """Simulates anomaly events for demo when no webcam."""
-    print("[INFO] Running in simulation mode. Use the frontend 'Demo Controls' to trigger events manually.")
-    
-    # Send system to sleep and keep it quiet instead of firing random events
+    """Multi-floor synthetic injects when no webcam — F1 + occasional F7 breach for Z-axis UI demo."""
+    print("[INFO] Simulation mode: auto-inject F1/F7; use Demo Controls for manual scenarios.")
+    dummy_frame = np.zeros((120, 160, 3), dtype=np.uint8)
+    await broadcast_system_state(False)
+
     while True:
-        await broadcast_system_state(True)
-        await asyncio.sleep(3600)  # Sleep for an hour instead of 4-10 seconds
+        await asyncio.sleep(0.03)
+
+        if not pipeline_instance or not memory_instance:
+            continue
+
+        # --- 3D multi-floor demo injection (~3% per tick @ ~30 Hz) ---
+        if np.random.rand() >= 0.03:
+            continue
+
+        target_floor = 1 if np.random.rand() < 0.8 else 7
+        zone = int(np.random.randint(1, 16))
+        risk_str = "HIGH" if np.random.rand() < 0.3 else "MEDIUM"
+        zone_id_str = f"F{target_floor}_Z{zone}"
+        lz_idx = zone - 1
+
+        if target_floor == 1:
+            pipeline_instance.q_tracker.detect(lz_idx)
+            qs = pipeline_instance.q_tracker.state_summary()
+            quantum_field = qs["field"]
+        else:
+            quantum_field = [
+                {
+                    "zone_id": f"F{target_floor}_Z{i + 1}",
+                    "probability": round(0.9 if i == lz_idx else 0.02, 4),
+                    "risk": (
+                        "HIGH"
+                        if i == lz_idx and risk_str == "HIGH"
+                        else ("MEDIUM" if i == lz_idx else "LOW")
+                    ),
+                }
+                for i in range(16)
+            ]
+            qs = {
+                "tracking": True,
+                "state": "tracking",
+                "most_likely_zone": lz_idx,
+                "max_probability": 0.9,
+                "entropy": 0.35,
+                "field": quantum_field,
+            }
+
+        heatmap = []
+        for i in range(16):
+            hot = i == lz_idx
+            heatmap.append({
+                "zone_id": f"F{target_floor}_Z{i + 1}",
+                "score": 0.88 if hot else 0.04,
+                "risk": risk_str if hot else "LOW",
+            })
+
+        sim_core = {
+            "zone_id": zone_id_str,
+            "timestamp": datetime.utcnow().isoformat(),
+            "behavior": "elevator_breach" if target_floor != 1 else "simulated_motion",
+            "behavior_label": (
+                "Elevator / stairwell breach (sim)"
+                if target_floor != 1
+                else "Simulated corridor motion"
+            ),
+            "risk_tier": risk_str,
+            "clip_score": 0.65,
+            "flow_magnitude": 4.2,
+            "recurrence": int(np.random.randint(0, 4)),
+            "divergence": 1.2,
+            "curl": 0.35,
+            "lyapunov": 0.25,
+            "trajectory": {
+                "path_entropy": 2.0,
+                "displacement_efficiency": 0.4,
+                "oscillation_count": 3,
+                "is_suspicious": True,
+                "label": "Simulated pattern",
+            },
+            "yolo_detections": [
+                {"class": "person", "confidence": 0.88, "bbox": [10, 10, 50, 50]}
+            ],
+            "forced_risk": None,
+            "heatmap": heatmap,
+            "quantum": qs,
+            "quantum_field": [
+                {"zone_id": q["zone_id"], "probability": q["probability"]} for q in quantum_field
+            ],
+            "quantum_state": qs["state"],
+            "quantum_entropy": qs.get("entropy", 0.0),
+            "reasoning": {
+                "risk_level": risk_str,
+                "pattern_summary": (
+                    "Simulated multi-vector anomaly detected in continuous tracking loop."
+                ),
+                "why_flagged": [
+                    "Synthetic demo inject",
+                    f"Floor {target_floor} zone activity",
+                    "Person track (simulated)",
+                ],
+                "predicted_next": "Monitor adjacent floors for vertical movement",
+                "recommended_action": "Verify stairwell / elevator cameras",
+            },
+            "simulated": True,
+        }
+
+        try:
+            memory_instance.remember(dummy_frame, sim_core)
+        except Exception as e:
+            print(f"[sim] memory.remember skipped: {e}")
+
+        event = {
+            "id": f"evt_{int(time.time()*1000)}",
+            **sim_core,
+            "pattern_id": None,
+        }
+        incident_log.appendleft(event)
+        await broadcast(event)
 
 
 def build_event(enriched: dict, reasoning: dict) -> dict:
@@ -355,7 +466,7 @@ def build_event(enriched: dict, reasoning: dict) -> dict:
         "quantum_field": [
             {"zone_id": z["zone_id"], "probability": z["probability"]}
             for z in (enriched.get("quantum", {}).get("field") or
-                      [{"zone_id": i, "probability": 0.0} for i in range(16)])
+                      [{"zone_id": f"F1_Z{i}", "probability": 0.0} for i in range(16)])
         ],
         "quantum_state":   enriched.get("quantum", {}).get("state", "idle"),
         "quantum_entropy": enriched.get("quantum", {}).get("entropy", 0.0),
@@ -656,9 +767,6 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in connected_ws:
             connected_ws.remove(websocket)
-
-
-from fastapi.staticfiles import StaticFiles
 
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 if os.path.isdir(frontend_path):

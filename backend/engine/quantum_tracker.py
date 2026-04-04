@@ -128,7 +128,7 @@ class SchrodingerTracker:
         Returns per-zone probability suitable for a dashboard heatmap overlay.
 
         Example output:
-          [{"zone_id": 0, "probability": 0.0625, "risk": "LOW"}, ...]
+          [{"zone_id": "F1_Z0", "probability": 0.0625, "risk": "LOW"}, ...]
         """
         result = []
         for i, p in enumerate(self.psi):
@@ -138,8 +138,9 @@ class SchrodingerTracker:
                 "MEDIUM" if pf > 0.15 else
                 "LOW"
             )
+            # Map grid indices to 3D floor coordinates (physical camera pipeline defaults to F1)
             result.append({
-                "zone_id":     i,
+                "zone_id":     f"F1_Z{i}",
                 "probability": pf,
                 "risk":        risk,
             })
