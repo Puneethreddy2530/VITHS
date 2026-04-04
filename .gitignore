@@ -40,9 +40,8 @@ frontend/.env.*
 *.onnx
 *.faiss
 *.index
-# Demo CCTV loops for offline dashboard (ship these; ignore other mp4 elsewhere)
+# Large video assets — keep local only; see scripts/generate_cctv_placeholders.py
 *.mp4
-!frontend/static/*.mp4
 *.avi
 *.h5
 
