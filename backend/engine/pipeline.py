@@ -14,21 +14,28 @@ from datetime import datetime
 from collections import defaultdict, deque
 from typing import Optional
 
-# ── Hostel block adjacency (4×4 grid) ─────────────────────────────
-#  0  1  2  3
-#  4  5  6  7
-#  8  9  10 11
-# 12  13 14 15
-ADJACENCY: dict[int, list[int]] = {}
-GRID_W = 4
-for z in range(16):
-    nbrs = []
-    r, c = divmod(z, GRID_W)
-    if c > 0:           nbrs.append(z - 1)   # left
-    if c < GRID_W-1:    nbrs.append(z + 1)   # right
-    if r > 0:           nbrs.append(z - GRID_W) # above
-    if r < 3:           nbrs.append(z + GRID_W) # below
-    ADJACENCY[z] = nbrs
+# ── D1 hex ring — zone neighbours for ST-GCN propagation ─────────
+#  Matches frontend/app.js ZONE_ADJ (B1..B2 clockwise, Gate=15).
+#  Undirected: symmetric closure of the UI graph so alerts propagate
+#  both ways along shared borders (adds B1↔B10 vs one-way UI list).
+ADJACENCY: dict[int, list[int]] = {
+    0:  [1, 9, 15],   # B1
+    1:  [0, 2],       # B2
+    2:  [1, 3],       # B3
+    3:  [2, 4],       # B4
+    4:  [3, 5],       # B5
+    5:  [4, 6],       # B6
+    6:  [5, 7],       # B7
+    7:  [6, 8],       # B8
+    8:  [7, 10],      # B9
+    9:  [0, 10],      # B10
+    10: [8, 9, 11],   # B11 (+ bottom centre strip)
+    11: [10, 12],     # B12
+    12: [11, 13],     # B13
+    13: [12, 14],     # B14
+    14: [13, 15],     # B15
+    15: [0, 14],      # Gate
+}
 
 
 # ══════════════════════════════════════════════════════════════════
