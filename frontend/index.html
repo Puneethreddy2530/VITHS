@@ -337,16 +337,26 @@
       <span class="demo-toggle" id="demo-toggle">▼</span>
     </div>
     <div class="demo-body" id="demo-body">
-      <button class="demo-btn btn-danger" id="simulate-btn" onclick="simulateHighRisk()">
-        ⚡ Simulate HIGH Risk Event
+      <button type="button" class="demo-btn" style="border-color:#34d399; color:#34d399;" onclick="runScenario('faiss_memory', this)">
+        🧠 Inject FAISS Memory Loop
       </button>
-      <button class="demo-btn btn-warning" id="tamper-btn" onclick="runTamperDemo()">
-        🔐 Run Tamper Demo
+      <button type="button" class="demo-btn" style="border-color:#c4b5fd; color:#c4b5fd;" onclick="runScenario('quantum_diffusion', this)">
+        ψ Trigger Quantum Tracker
       </button>
-      <button class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
-        🔄 Reset All Zones
+      <button type="button" class="demo-btn" style="border-color:#f9a8d4; color:#f9a8d4;" onclick="runScenario('trajectory_mule', this)">
+        🗺 Inject Mule Trajectory
       </button>
-      <div class="demo-result" id="tamper-result"></div>
+      <button type="button" class="demo-btn" style="border-color:#fca5a5; color:#fca5a5;" onclick="runScenario('physics_chaos', this)">
+        〜 Trigger Physics Chaos (Fight)
+      </button>
+
+      <button type="button" class="demo-btn btn-warning" id="tamper-btn" onclick="runTamperDemo()">
+        🔐 Run PQC Tamper Demo
+      </button>
+      <button type="button" class="demo-btn btn-reset" id="reset-btn" onclick="resetAllZones()">
+        🔄 Reset All Data
+      </button>
+      <div class="demo-result" id="tamper-result" style="grid-column: 1 / -1; margin-top: 5px;"></div>
     </div>
   </div>
 

@@ -661,7 +661,7 @@ body {
   gap: 8px;
   margin-top: 12px;
   overflow: hidden;
-  max-height: 200px;
+  max-height: 320px;
   transition: max-height 0.4s ease, opacity 0.3s ease;
 }
 .demo-body.collapsed {

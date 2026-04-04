@@ -1057,24 +1057,37 @@ function toggleDemoPanel() {
   toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
 }
 
-function simulateHighRisk() {
-  const btn = document.getElementById('simulate-btn');
-  btn.textContent = '⏳ Simulating...';
+function runScenario(name, btn) {
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Running...';
   btn.disabled = true;
-  fetch(API_BASE + '/demo/simulate', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({risk: 'HIGH', behavior: 'fast_movement'})
-  })
-  .then(r => r.json())
-  .then(d => {
-    btn.textContent = '✅ Sent! Zone ' + d.zone_id;
-    setTimeout(() => { btn.textContent = '⚡ Simulate HIGH Risk Event'; btn.disabled = false; }, 2000);
-  })
-  .catch(() => {
-    btn.textContent = '❌ Failed';
-    setTimeout(() => { btn.textContent = '⚡ Simulate HIGH Risk Event'; btn.disabled = false; }, 2000);
-  });
+
+  fetch(API_BASE + '/demo/scenario/' + encodeURIComponent(name), { method: 'POST' })
+    .then(async (r) => {
+      if (!r.ok) {
+        let msg = r.statusText;
+        try {
+          const j = await r.json();
+          if (j.detail) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail);
+        } catch (_) { /* ignore */ }
+        throw new Error(msg);
+      }
+      return r.json();
+    })
+    .then(() => {
+      btn.textContent = '✅ Success!';
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }, 2000);
+    })
+    .catch(() => {
+      btn.textContent = '❌ Failed';
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }, 2000);
+    });
 }
 
 function runTamperDemo() {
@@ -1108,11 +1121,11 @@ function resetAllZones() {
     .then(() => {
       btn.textContent = '✅ Reset!';
       handleSystemReset();
-      setTimeout(() => { btn.textContent = '🔄 Reset All Zones'; btn.disabled = false; }, 2000);
+      setTimeout(() => { btn.textContent = '🔄 Reset All Data'; btn.disabled = false; }, 2000);
     })
     .catch(() => {
       btn.textContent = '❌ Failed';
-      setTimeout(() => { btn.textContent = '🔄 Reset All Zones'; btn.disabled = false; }, 2000);
+      setTimeout(() => { btn.textContent = '🔄 Reset All Data'; btn.disabled = false; }, 2000);
     });
 }
 
