@@ -25,35 +25,31 @@ let _latestEvent = null;
 let _placements  = {};
 let _zoneBehaviors = {};
 
-/* ── SVG Zone Definitions — Hexagonal Shield Architecture ──────────────── */
+/* ── SVG Zone Definitions — Doubled B1/B2 & matching B9/B10; grid-aligned to outer/inner hex ─ */
 const ZONE_DEFS = [
-  // Top Edge
-  { id:0,  pts:"400,100 500,100 500,220 440,220",    label:"B1", cat:"north",  cx:460, cy:160 },
-  { id:1,  pts:"500,100 600,100 560,220 500,220",    label:"B2", cat:"north",  cx:540, cy:160 },
+  // Top — each 340px outer span (2× prior ~170); inner edge 320–500 / 500–680
+  { id:0,  pts:"160,100 500,100 500,220 320,220",    label:"B1", cat:"north",  cx:370, cy:160 },
+  { id:1,  pts:"500,100 840,100 680,220 500,220",    label:"B2", cat:"north",  cx:630, cy:160 },
 
-  // Top-Right Flare
-  { id:2,  pts:"600,100 683,217 610,297 560,220",    label:"B3", cat:"corner", cx:613, cy:208 },
-  { id:3,  pts:"683,217 766,333 660,373 610,297",    label:"B4", cat:"east",   cx:680, cy:305 },
-  { id:4,  pts:"766,333 850,450 710,450 660,373",    label:"B5", cat:"east",   cx:746, cy:401 },
+  // Right flank — thirds along outer (840,100)→(900,450)→(840,880) with matching inner
+  { id:2,  pts:"840,100 860,217 693,297 680,220",    label:"B3", cat:"corner", cx:768, cy:204 },
+  { id:3,  pts:"860,217 880,333 707,373 693,297",    label:"B4", cat:"east",   cx:785, cy:305 },
+  { id:4,  pts:"880,333 900,450 720,450 707,373",    label:"B5", cat:"east",   cx:802, cy:364 },
+  { id:5,  pts:"900,450 893,548 714,553 720,450",    label:"B6", cat:"east",   cx:807, cy:428 },
+  { id:6,  pts:"893,548 887,645 707,656 714,553",    label:"B7", cat:"east",   cx:800, cy:500 },
+  { id:7,  pts:"887,645 840,880 680,760 707,656",    label:"B8", cat:"corner", cx:779, cy:765 },
 
-  // Bottom-Right Taper
-  { id:5,  pts:"850,450 800,567 673,527 710,450",    label:"B6", cat:"east",   cx:758, cy:498 },
-  { id:6,  pts:"800,567 750,683 636,603 673,527",    label:"B7", cat:"corner", cx:715, cy:595 },
-  { id:7,  pts:"750,683 700,800 600,680 636,603",    label:"B8", cat:"south",  cx:671, cy:691 },
+  // Bottom — same 340px widths as B1/B2
+  { id:8,  pts:"840,880 500,880 500,760 680,760",    label:"B9", cat:"south",  cx:630, cy:820 },
+  { id:9,  pts:"500,880 160,880 320,760 500,760",    label:"B10", cat:"south",  cx:370, cy:820 },
 
-  // Bottom Edge
-  { id:8,  pts:"700,800 500,800 500,680 600,680",    label:"B9", cat:"south",  cx:575, cy:740 },
-  { id:9,  pts:"500,800 300,800 400,680 500,680",    label:"B10", cat:"south",  cx:425, cy:740 },
-
-  // Bottom-Left Taper
-  { id:10, pts:"300,800 250,683 363,603 400,680",    label:"B11", cat:"corner", cx:328, cy:691 },
-  { id:11, pts:"250,683 200,567 326,527 363,603",    label:"B12", cat:"west",   cx:285, cy:595 },
-  { id:12, pts:"200,567 150,450 290,450 326,527",    label:"B13", cat:"west",   cx:241, cy:498 },
-
-  // Top-Left Flare
-  { id:13, pts:"150,450 233,333 340,373 290,450",    label:"B14", cat:"west",   cx:253, cy:401 },
-  { id:14, pts:"233,333 317,217 390,297 340,373",    label:"B15", cat:"corner", cx:320, cy:305 },
-  { id:15, pts:"317,217 400,100 440,220 390,297",    label:"Gate", cat:"entrance", cx:387, cy:208 },
+  // Left flank — thirds (160,880)→(100,450)→(160,100)
+  { id:10, pts:"160,880 140,737 307,657 320,760",    label:"B11", cat:"corner", cx:232, cy:759 },
+  { id:11, pts:"140,737 120,593 293,553 307,657",    label:"B12", cat:"west",   cx:215, cy:645 },
+  { id:12, pts:"120,593 100,450 280,450 293,553",    label:"B13", cat:"west",   cx:198, cy:522 },
+  { id:13, pts:"100,450 120,361 293,373 280,450",    label:"B14", cat:"west",   cx:198, cy:406 },
+  { id:14, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:215, cy:326 },
+  { id:15, pts:"140,272 160,100 320,220 307,297",    label:"Gate", cat:"entrance", cx:232, cy:197 },
 ];
 
 const ZONE_ADJ = {
@@ -208,26 +204,26 @@ function renderPixelHeatmap() {
   // Clear the canvas for the new frame
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // --- NEW: Hexagonal Shield Clipping Mask ---
+  // --- Hex shield clip — identical to index.html building-wall / inner-wall ---
   ctx.save();
   ctx.beginPath();
 
-  // 1. Draw Outer Shield (Clockwise)
-  ctx.moveTo(400, 100); // Top Left
-  ctx.lineTo(600, 100); // Top Right
-  ctx.lineTo(850, 450); // Mid Right
-  ctx.lineTo(700, 800); // Bottom Right
-  ctx.lineTo(300, 800); // Bottom Left
-  ctx.lineTo(150, 450); // Mid Left
+  // 1. Outer (clockwise)
+  ctx.moveTo(160, 100);
+  ctx.lineTo(840, 100);
+  ctx.lineTo(900, 450);
+  ctx.lineTo(840, 880);
+  ctx.lineTo(160, 880);
+  ctx.lineTo(100, 450);
   ctx.closePath();
 
-  // 2. Draw Inner Courtyard Hole (Counter-Clockwise to punch out)
-  ctx.moveTo(440, 220); // Inner Top Left
-  ctx.lineTo(290, 450); // Inner Mid Left
-  ctx.lineTo(400, 680); // Inner Bottom Left
-  ctx.lineTo(600, 680); // Inner Bottom Right
-  ctx.lineTo(710, 450); // Inner Mid Right
-  ctx.lineTo(560, 220); // Inner Top Right
+  // 2. Inner courtyard (counter-clockwise hole)
+  ctx.moveTo(320, 220);
+  ctx.lineTo(280, 450);
+  ctx.lineTo(320, 760);
+  ctx.lineTo(680, 760);
+  ctx.lineTo(720, 450);
+  ctx.lineTo(680, 220);
   ctx.closePath();
 
   // 3. Clip using "evenodd"
