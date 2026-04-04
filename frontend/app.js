@@ -89,22 +89,22 @@ function resetPerFloorZoneOverlays() {
 
 /* ── SVG Zone Definitions — Doubled B1/B2 & matching B9/B10; grid-aligned to outer/inner hex ─ */
 const ZONE_DEFS = [
-  { id:0,  pts:"140,272 160,100 320,220 307,297",    label:"Gate", cat:"entrance", cx:232, cy:197 },
-  { id:1,  pts:"160,100 500,100 500,220 320,220",    label:"B1", cat:"north",  cx:370, cy:160 },
-  { id:2,  pts:"500,100 840,100 680,220 500,220",    label:"B2", cat:"north",  cx:630, cy:160 },
-  { id:3,  pts:"840,100 860,217 693,297 680,220",    label:"B3", cat:"corner", cx:768, cy:204 },
-  { id:4,  pts:"860,217 880,333 707,373 693,297",    label:"B4", cat:"east",   cx:785, cy:305 },
-  { id:5,  pts:"880,333 900,450 720,450 707,373",    label:"B5", cat:"east",   cx:802, cy:364 },
-  { id:6,  pts:"900,450 893,548 714,553 720,450",    label:"B6", cat:"east",   cx:807, cy:428 },
-  { id:7,  pts:"893,548 887,645 707,656 714,553",    label:"B7", cat:"east",   cx:800, cy:500 },
-  { id:8,  pts:"887,645 840,880 680,760 707,656",    label:"B8", cat:"corner", cx:779, cy:765 },
-  { id:9,  pts:"628,880 840,880 680,760 568,760",    label:"B9", cat:"south",  cx:679, cy:820 },
+  { id:0,  pts:"140,272 160,100 320,220 307,297",    label:"Gate", cat:"entrance", cx:222, cy:217 },
+  { id:1,  pts:"160,100 500,100 500,220 320,220",    label:"B1", cat:"north",  cx:366, cy:154 },
+  { id:2,  pts:"500,100 840,100 680,220 500,220",    label:"B2", cat:"north",  cx:634, cy:154 },
+  { id:3,  pts:"840,100 860,217 693,297 680,220",    label:"B3", cat:"corner", cx:774, cy:205 },
+  { id:4,  pts:"860,217 880,333 707,373 693,297",    label:"B4", cat:"east",   cx:791, cy:303 },
+  { id:5,  pts:"880,333 900,450 720,450 707,373",    label:"B5", cat:"east",   cx:808, cy:401 },
+  { id:6,  pts:"900,450 893,548 714,553 720,450",    label:"B6", cat:"east",   cx:806, cy:500 },
+  { id:7,  pts:"893,548 887,645 707,656 714,553",    label:"B7", cat:"east",   cx:799, cy:601 },
+  { id:8,  pts:"887,645 840,880 680,760 707,656",    label:"B8", cat:"corner", cx:789, cy:739 },
+  { id:9,  pts:"628,880 840,880 680,760 568,760",    label:"B9", cat:"south",  cx:685, cy:826 },
   { id:10, pts:"373,880 628,880 568,760 433,760 320,760 307,657 140,737 160,880", label:"B10", cat:"corner", cx:353, cy:804 },
-  { id:11, pts:"160,880 373,880 433,760 320,760",    label:"B11", cat:"south",  cx:322, cy:820 },
-  { id:12, pts:"140,737 120,593 293,553 307,657",    label:"B12", cat:"west",   cx:215, cy:645 },
-  { id:13, pts:"120,593 100,450 280,450 293,553",    label:"B13", cat:"west",   cx:198, cy:522 },
-  { id:14, pts:"100,450 120,361 293,373 280,450",    label:"B14", cat:"west",   cx:198, cy:406 },
-  { id:15, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:215, cy:326 },
+  { id:11, pts:"160,880 373,880 433,760 320,760",    label:"B11", cat:"south", cx:316, cy:826 },
+  { id:12, pts:"140,737 120,593 293,553 307,657",    label:"B12", cat:"west",   cx:210, cy:637 },
+  { id:13, pts:"120,593 100,450 280,450 293,553",    label:"B13", cat:"west",   cx:193, cy:512 },
+  { id:14, pts:"100,450 120,361 293,373 280,450",    label:"B14", cat:"west",   cx:196, cy:409 },
+  { id:15, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:213, cy:326 },
 ];
 
 // Undirected ring; keep in sync with backend/engine/pipeline.py ADJACENCY
@@ -136,7 +136,7 @@ for (const z of ZONE_DEFS) _zoneState[z.id] = { score:0, risk:'LOW', behavior:''
     // Label text
     const txt = document.createElementNS(NS, 'text');
     txt.setAttribute('x', z.cx);
-    txt.setAttribute('y', z.cy - 6);
+    txt.setAttribute('y', z.cy - 12);
     txt.setAttribute('class', 'zone-label-text');
     txt.textContent = z.label;
     labelG.appendChild(txt);
@@ -144,7 +144,7 @@ for (const z of ZONE_DEFS) _zoneState[z.id] = { score:0, risk:'LOW', behavior:''
     // Risk text below label
     const rtxt = document.createElementNS(NS, 'text');
     rtxt.setAttribute('x', z.cx);
-    rtxt.setAttribute('y', z.cy + 10);
+    rtxt.setAttribute('y', z.cy + 4);
     rtxt.setAttribute('class', 'zone-risk-text');
     rtxt.setAttribute('id', 'zlbl-' + z.id);
     rtxt.textContent = 'LOW';
@@ -153,7 +153,7 @@ for (const z of ZONE_DEFS) _zoneState[z.id] = { score:0, risk:'LOW', behavior:''
     // Psi text
     const ptxt = document.createElementNS(NS, 'text');
     ptxt.setAttribute('x', z.cx);
-    ptxt.setAttribute('y', z.cy + 22);
+    ptxt.setAttribute('y', z.cy + 16);
     ptxt.setAttribute('class', 'zone-psi-text');
     ptxt.setAttribute('id', 'zpsi-' + z.id);
     ptxt.textContent = '';
