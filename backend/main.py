@@ -11,7 +11,7 @@ from datetime import datetime
 from collections import deque
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, Response, FileResponse
+from fastapi.responses import StreamingResponse, Response, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -738,77 +738,147 @@ async def demo_tamper():
         "signature": signed["pqc_signature"]["sha3_hash"][:32] + "...",
     }
 
-class SimulateRequest(BaseModel):
-    risk: str = "HIGH"
-    behavior: str = "fast_movement"
-
-@app.post("/demo/simulate")
-async def demo_simulate(req: SimulateRequest):
-    zone_id = random.randint(0, 15)
-    behaviors_map = {
-        "fast_movement": "Fast movement across zone",
-        "loitering":     "Loitering near entrance",
-        "erratic":       "Erratic / suspicious motion",
-        "animal":        "Animal intrusion",
-    }
-    is_traj_suspicious = random.random() < 0.5
-    osc = random.randint(4, 6) if is_traj_suspicious else random.randint(0, 2)
-    eff = round(random.uniform(0.15, 0.30), 3) if is_traj_suspicious else round(random.uniform(0.5, 0.9), 3)
-    ent = round(random.uniform(2.2, 3.0), 3) if is_traj_suspicious else round(random.uniform(0.3, 1.5), 3)
-    if is_traj_suspicious:
-        traj_label = random.choice(["Mule behavior", "Zigzag pattern", "Chokepoint loiter"])
-    else:
-        traj_label = "Normal"
-
-    event = {
-        "id":              f"evt_{int(time.time()*1000)}",
-        "timestamp":       datetime.utcnow().isoformat(),
-        "zone_id":         zone_id,
-        "behavior":        req.behavior,
-        "behavior_label":  behaviors_map.get(req.behavior, req.behavior.replace("_", " ").title()),
-        "risk_tier":       req.risk.upper(),
-        "clip_score":      round(random.uniform(0.5, 0.95), 3),
-        "flow_magnitude":  round(random.uniform(2.5, 6.0), 3),
-        "recurrence":      random.randint(1, 8),
-        "pattern_id":      f"P{random.randint(1,20):03d}",
-        "reasoning": {
-            "risk_level":         req.risk.upper(),
-            "pattern_summary":    f"Simulated {req.behavior.replace('_',' ')} detected in zone {zone_id}",
-            "why_flagged":        [f"{req.behavior.replace('_',' ').title()} detected", f"Risk level: {req.risk.upper()}", "Demo simulation"],
-            "predicted_next":     "Potential escalation if behavior persists",
-            "recommended_action": "Dispatch security patrol to zone",
-        },
-        "heatmap": [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)],
-        "quantum_field": [
-            {"zone_id": i, "probability": random.uniform(0, 0.1)
-             if i != zone_id else random.uniform(0.7, 1.0)}
-            for i in range(16)
-        ],
-        "quantum_state":   random.choice(["tracking", "diffusing", "collapsed"]),
-        "quantum_entropy": round(random.uniform(0.5, 2.5), 3),
-        "divergence":      round(random.uniform(-0.8, 0.8), 4),
-        "curl":            round(random.uniform(-0.8, 0.8), 4),
-        "lyapunov":        round(random.uniform(-0.3, 0.6), 4),
-        "trajectory": {
-            "path_entropy":            ent,
-            "displacement_efficiency": eff,
-            "oscillation_count":       osc,
-            "is_suspicious":           is_traj_suspicious,
-            "label":                   traj_label,
-        },
+def _demo_event_shell() -> dict:
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
         "simulated": True,
+        "heatmap": [{"zone_id": z, "score": 0.0, "risk": "LOW"} for z in range(16)],
+        "quantum_field": [{"zone_id": i, "probability": 0.0} for i in range(16)],
+        "quantum_state": "idle",
+        "quantum_entropy": 0.0,
+        "divergence": 0.0,
+        "curl": 0.0,
+        "lyapunov": 0.0,
+        "trajectory": {
+            "is_suspicious": False,
+            "path_entropy": 0.0,
+            "displacement_efficiency": 1.0,
+            "oscillation_count": 0,
+            "label": "Normal",
+        },
+        "clip_score": 0.5,
+        "flow_magnitude": 1.0,
+        "recurrence": 0,
+        "pattern_id": None,
+        "pattern_label": None,
     }
-    score = round(random.uniform(0.6, 1.0), 3)
-    event["heatmap"][zone_id]["score"] = score
-    event["heatmap"][zone_id]["risk"]  = req.risk.upper()
-    for nbr in [zone_id-1, zone_id+1, zone_id-4, zone_id+4]:
-        if 0 <= nbr < 16:
-            event["heatmap"][nbr]["score"] = round(score * 0.4, 3)
-            event["heatmap"][nbr]["risk"]  = "MEDIUM" if req.risk.upper() == "HIGH" else "LOW"
 
-    incident_log.appendleft(event)
-    await broadcast(event)
-    return {"status": "ok", "event_id": event["id"], "zone_id": zone_id}
+
+def _quantum_field_from_sparse(weights: dict[int, float]) -> list:
+    """16-zone quantum_field; unspecified zones → 0."""
+    return [{"zone_id": i, "probability": round(float(weights.get(i, 0.0)), 4)} for i in range(16)]
+
+
+@app.post("/demo/scenario/{name}")
+async def demo_scenario(name: str):
+    events_to_emit = []
+
+    if name == "faiss_memory":
+        zone_id = 2
+        for i in range(1, 4):
+            evt = copy.deepcopy(_demo_event_shell())
+            rt = "MEDIUM" if i < 3 else "HIGH"
+            evt.update(
+                {
+                    "id": f"demo_faiss_{i}_{int(time.time() * 1000)}",
+                    "zone_id": zone_id,
+                    "behavior": "loitering",
+                    "behavior_label": f"Loitering near entrance (Hit #{i})",
+                    "risk_tier": rt,
+                    "clip_score": 0.85,
+                    "flow_magnitude": 1.2,
+                    "recurrence": i,
+                    "pattern_id": "P042" if i > 1 else None,
+                }
+            )
+            evt["heatmap"][zone_id] = {"zone_id": zone_id, "score": 0.9, "risk": rt}
+            events_to_emit.append(evt)
+
+    elif name == "quantum_diffusion":
+        zone_id = 4
+        evt = copy.deepcopy(_demo_event_shell())
+        qweights = {4: 0.4, 3: 0.2, 5: 0.2, 0: 0.1, 8: 0.1}
+        evt.update(
+            {
+                "id": f"demo_quant_{int(time.time() * 1000)}",
+                "zone_id": zone_id,
+                "behavior": "fast_movement",
+                "behavior_label": "Intruder lost - tracking probability",
+                "risk_tier": "HIGH",
+                "quantum_state": "diffusing",
+                "quantum_entropy": 1.4,
+                "quantum_field": _quantum_field_from_sparse(qweights),
+            }
+        )
+        evt["heatmap"][zone_id] = {"zone_id": zone_id, "score": 0.7, "risk": "HIGH"}
+        events_to_emit.append(evt)
+
+    elif name == "trajectory_mule":
+        zone_id = 13
+        evt = copy.deepcopy(_demo_event_shell())
+        evt.update(
+            {
+                "id": f"demo_traj_{int(time.time() * 1000)}",
+                "zone_id": zone_id,
+                "behavior": "erratic",
+                "behavior_label": "Erratic motion",
+                "risk_tier": "HIGH",
+                "trajectory": {
+                    "path_entropy": 2.8,
+                    "displacement_efficiency": 0.25,
+                    "oscillation_count": 4,
+                    "is_suspicious": True,
+                    "label": "Mule behavior",
+                },
+            }
+        )
+        evt["heatmap"][zone_id] = {"zone_id": zone_id, "score": 0.88, "risk": "HIGH"}
+        events_to_emit.append(evt)
+
+    elif name == "physics_chaos":
+        zone_id = 10
+        evt = copy.deepcopy(_demo_event_shell())
+        evt.update(
+            {
+                "id": f"demo_phys_{int(time.time() * 1000)}",
+                "zone_id": zone_id,
+                "behavior": "erratic",
+                "behavior_label": "Crowd Panic / Fight detected",
+                "risk_tier": "CRITICAL",
+                "divergence": 2.4,
+                "curl": -1.8,
+                "lyapunov": 0.45,
+                "flow_magnitude": 6.5,
+            }
+        )
+        evt["heatmap"][zone_id] = {"zone_id": zone_id, "score": 1.0, "risk": "CRITICAL"}
+        events_to_emit.append(evt)
+
+    else:
+        return JSONResponse(
+            {"detail": f"Unknown scenario '{name}'"},
+            status_code=404,
+        )
+
+    title = name.replace("_", " ").title()
+    for e in events_to_emit:
+        e["reasoning"] = {
+            "risk_level": e["risk_tier"],
+            "pattern_summary": f"Demo Scenario: {title}",
+            "why_flagged": [
+                "Triggered by presentation demo controls",
+                f"Targeted system: {name}",
+            ],
+            "predicted_next": "System functioning as expected",
+            "recommended_action": "Explain this feature to the judges",
+        }
+        signed = sign_event(copy.deepcopy(e))
+        incident_log.appendleft(signed)
+        await broadcast(signed)
+        await asyncio.sleep(1.5)
+
+    return {"status": "ok", "scenario": name, "events": len(events_to_emit)}
+
 
 @app.post("/demo/reset")
 async def demo_reset():
