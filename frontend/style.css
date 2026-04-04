@@ -908,6 +908,62 @@ body.alert-mode > *:not(.main-grid) {
   flex-wrap: wrap;
 }
 
+.demo-feed-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fcd34d;
+  background: rgba(120, 53, 15, 0.45);
+  border: 1px solid rgba(252, 211, 77, 0.45);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.cctv-demo-disclosure {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #a8a8b8;
+  background: rgba(30, 30, 42, 0.6);
+  border: 1px solid #2a2a38;
+  border-radius: 8px;
+  border-left: 3px solid #f59e0b;
+}
+.cctv-demo-disclosure code {
+  font-size: 10px;
+  color: #fde68a;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.cctv-demo-disclosure .bz-key {
+  color: #e5e7eb;
+}
+.cctv-demo-disclosure .bz-key strong {
+  color: #34d399;
+}
+
+.map-demo-feed-note {
+  margin: 8px 0 0;
+  font-size: 9px;
+  line-height: 1.4;
+  color: #6b7280;
+}
+.map-demo-feed-note code {
+  font-size: 8px;
+  color: #9ca3af;
+}
+
+.demo-feed-inline {
+  font-size: 10px;
+  font-weight: 400;
+  color: #6b7280;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .cctv-matrix {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -996,9 +1052,16 @@ body.alert-mode > *:not(.main-grid) {
 .cctv-label {
   color: #fff;
   font-family: ui-monospace, 'Cascadia Code', monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  line-height: 1.25;
+  max-width: 78%;
+}
+.cctv-label code {
+  font-size: 8px;
+  color: #fde68a;
+  font-weight: 600;
 }
 .cctv-status {
   color: #34d399;

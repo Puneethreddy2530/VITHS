@@ -109,13 +109,23 @@ const ZONE_DEFS = [
   { id:15, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:213, cy:326 },
 ];
 
+/** Hostel hex face label (Gate / B1…B15). Not the command-center stream index Z. */
+function hostelGridLabel(raw) {
+  if (raw == null) return '—';
+  const pz = parseFloorZone(raw);
+  if (pz.localZone == null) return String(raw);
+  const def = ZONE_DEFS.find(z => z.id === pz.localZone);
+  const b = def ? def.label : `cell ${pz.localZone}`;
+  return pz.floor !== 1 ? `F${pz.floor} · ${b}` : b;
+}
+
 // Undirected ring; keep in sync with backend/engine/pipeline.py ADJACENCY
 const ZONE_ADJ = {
   0:[15, 1], 1:[0, 2], 2:[1, 3], 3:[2, 4], 4:[3, 5], 5:[4, 6], 6:[5, 7], 7:[6, 8],
   8:[7, 9], 9:[8, 10], 10:[9, 11], 11:[10, 12], 12:[11, 13], 13:[12, 14], 14:[13, 15], 15:[14, 0]
 };
 
-/* Backend streams: Z0 live, Z4 corridor file, Z7 parking file, Z15 gate file — map any map zone → nearest stream (ring adjacency) */
+/* Four /video_feed/{z} sources — Z = stream id in matrix. B4/B7/B15 on hostel heatmap share index with Z4/Z7/Z15 demo files. */
 const CAMERA_STREAM_ZONES = [0, 4, 7, 15];
 const STREAM_ZONE_TO_CCTV_TILE_ID = { 0: 'cctv-0', 4: 'cctv-4', 7: 'cctv-7', 15: 'cctv-15' };
 
@@ -693,7 +703,7 @@ function updateTrajectoryPath(evt) {
 function showTooltip(e, zoneDef) {
   const tt = document.getElementById('map-tooltip');
   const st = _zoneState[zoneDef.id] || {};
-  document.getElementById('tt-zone').textContent = `Zone ${zoneDef.label} (${zoneDef.cat})`;
+  document.getElementById('tt-zone').textContent = `Grid ${zoneDef.label} (${zoneDef.cat}) · B face`;
   document.getElementById('tt-risk').textContent = `Risk: ${st.risk || 'LOW'}`;
   document.getElementById('tt-risk').style.color = RISK_COLOR[st.risk] || '#34d399';
   document.getElementById('tt-behavior').textContent = st.behavior ? `Behavior: ${st.behavior}` : '';
@@ -892,6 +902,11 @@ function renderAlertCard(evt) {
     return;
   }
   const localZone = pz.localZone;
+  const gridBLabel = hostelGridLabel(evt.zone_id);
+  const nearStreamZ = localZone != null ? MAP_ZONE_TO_NEAREST_STREAM[localZone] : null;
+  const zoneBanner = nearStreamZ != null
+    ? `${gridBLabel} · nearest Z${nearStreamZ}`
+    : gridBLabel;
 
   // Create a unique signature for this specific ongoing event
   const sig = `${evt.zone_id}-${risk}-${evt.behavior}`;
@@ -974,7 +989,7 @@ function renderAlertCard(evt) {
       <div class="alert-left">
         <div class="alert-header">
           <span class="risk-pill" style="background:${color}">${esc(risk)}</span>
-          <span class="alert-zone-tag">Zone ${esc(evt.zone_id)}</span>
+          <span class="alert-zone-tag">${esc(zoneBanner)}</span>
           <span class="alert-time-tag">${esc(ts)}</span>
           <button onclick="dismissAlert()" style="margin-left:auto; padding:4px 10px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:4px; cursor:pointer;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">Dismiss</button>
         </div>
@@ -996,7 +1011,7 @@ function renderAlertCard(evt) {
 
   if (risk === 'HIGH' || risk === 'CRITICAL') {
     const tw = document.getElementById('tw-target');
-    const zoneStr = ZONE_DEFS.find(z => z.id === localZone)?.label || `Z${localZone}`;
+    const zoneStr = ZONE_DEFS.find(z => z.id === localZone)?.label || `B${localZone}`;
     const bStr = evt.behavior_label || evt.behavior || '';
     const txt = `⚠ Intrusion detected...\n→ Zone ${zoneStr}\n→ Behavior: ${bStr.replace(/_/g, ' ')}\n→ Risk: ${risk}`;
     let i = 0;
@@ -1033,13 +1048,19 @@ function addEventRow(evt) {
   const risk  = evt.risk_tier || 'LOW';
   const color = RISK_COLOR[risk] || RISK_COLOR.LOW;
   const ts    = evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : '';
+  const pzEvt = parseFloorZone(evt.zone_id);
+  const gridB = hostelGridLabel(evt.zone_id);
+  const nearZ = pzEvt.localZone != null ? MAP_ZONE_TO_NEAREST_STREAM[pzEvt.localZone] : null;
+  const zoneTitle = nearZ != null
+    ? `Hostel grid ${gridB} — nearest stream Z${nearZ}`
+    : `Hostel grid ${gridB}`;
 
   const row = document.createElement('div');
   row.className = 'event-row';
   row.innerHTML = `
     <span class="evt-dot" style="background:${color}"></span>
     <span class="evt-time">${esc(ts)}</span>
-    <span class="evt-zone">Z${esc(evt.zone_id)}</span>
+    <span class="evt-zone" title="${esc(zoneTitle)}">${esc(gridB)}</span>
     <span class="evt-label">${esc(evt.behavior_label || evt.behavior || '')}</span>
     ${evt.pattern_id ? `<span class="evt-pat">${esc(evt.pattern_id)}</span>` : ''}
     <span class="evt-risk" style="color:${color}">${esc(risk)}</span>

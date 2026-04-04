@@ -103,6 +103,7 @@
       <div class="video-header cctv-matrix-video-header">
         <span class="card-title" style="margin:0">Command Center Multi-Feed Matrix</span>
         <div class="cctv-matrix-header-actions">
+          <span class="demo-feed-badge" title="Disclosure for judges / demo">DEMO · file-backed CCTV</span>
           <span class="on-air">● SYSTEM ACTIVE</span>
         </div>
       </div>
@@ -110,7 +111,7 @@
     <div class="cctv-matrix" id="cctv-matrix-root">
       <div class="cctv-feed" id="cctv-0" data-stream-zone="0">
         <div class="cctv-overlay">
-          <span class="cctv-label">LIVE // Z0 · patrol</span>
+          <span class="cctv-label"><strong>Z0</strong> stream · LIVE · primary <strong>Gate</strong> arc on <strong>B</strong> grid</span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -126,7 +127,7 @@
 
       <div class="cctv-feed" id="cctv-4" data-stream-zone="4">
         <div class="cctv-overlay">
-          <span class="cctv-label">FILE // Z4 · corridor</span>
+          <span class="cctv-label">DEMO <strong>Z4</strong> = <strong>B4</strong> cell · <code>cctv_corridor.mp4</code></span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -142,7 +143,7 @@
 
       <div class="cctv-feed" id="cctv-15" data-stream-zone="15">
         <div class="cctv-overlay">
-          <span class="cctv-label">FILE // Z15 · gate</span>
+          <span class="cctv-label">DEMO <strong>Z15</strong> = <strong>B15</strong> cell · <code>cctv_gate.mp4</code></span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -158,7 +159,7 @@
 
       <div class="cctv-feed" id="cctv-7" data-stream-zone="7">
         <div class="cctv-overlay">
-          <span class="cctv-label">FILE // Z7 · parking</span>
+          <span class="cctv-label">DEMO <strong>Z7</strong> = <strong>B7</strong> cell · <code>cctv_parking.mp4</code></span>
           <span class="cctv-status">OK</span>
         </div>
         <div class="cctv-toolbar">
@@ -172,6 +173,16 @@
         </div>
       </div>
     </div>
+    <p class="cctv-demo-disclosure" id="cctv-demo-disclosure">
+      <strong>Demo disclosure — <span class="bz-key"><strong>B</strong> = hostel hex</span> · <span class="bz-key"><strong>Z</strong> = command-center stream</span>:</strong>
+      The <em>heatmap</em> tints polygons labeled <strong>Gate, B1…B15</strong> on the D1 plan (detection / ST-GCN / ψ).
+      The <em>2×2 wall</em> shows four <strong>Z</strong> feeds: <strong>Z0</strong> live webcam (or placeholder), and three packaged loops in <code>frontend/static/</code>:
+      <strong>Z4</strong>→<code>cctv_corridor.mp4</code> (same index as grid <strong>B4</strong>),
+      <strong>Z7</strong>→<code>cctv_parking.mp4</code> (<strong>B7</strong>),
+      <strong>Z15</strong>→<code>cctv_gate.mp4</code> (<strong>B15</strong>).
+      Any alert on a <strong>B</strong> cell still routes the red tile flash to the <strong>nearest Z</strong> along the security ring (so e.g. <strong>Gate</strong> may light <strong>Z15</strong> gate footage one hop away).
+      Same runtime pipeline as production; labels separate plan (<strong>B</strong>) from encoders (<strong>Z</strong>).
+    </p>
   </div>
 
   <!-- ── MAIN CONTENT: Z-axis floor selector + dashboard ───────── -->
@@ -245,6 +256,11 @@
         <span><span class="legend-swatch" style="background:#ef4444"></span>HIGH</span>
         <span style="margin-left:auto; font-size:9px; color:#555;">▲ = optimal camera (AQHSO plan) · ψ = quantum probability</span>
       </div>
+      <p class="map-demo-feed-note">
+        <strong>Heatmap mapping:</strong> colors follow <strong>Gate / B1–B15</strong> (hostel grid). Incident routing to video uses stream indices <strong>Z0, Z4, Z7, Z15</strong>:
+        each <strong>B</strong> alert highlights the <em>nearest</em> <strong>Z</strong> tile (ring adjacency).
+        Demo files align on index: <strong>B4↔Z4</strong> <code>cctv_corridor.mp4</code>, <strong>B7↔Z7</strong> <code>cctv_parking.mp4</code>, <strong>B15↔Z15</strong> <code>cctv_gate.mp4</code>; <strong>Gate (B id 0)↔Z0</strong> live.
+      </p>
     </div>
 
     <!-- AQHSO: offline placement + what runtime does -->
@@ -349,7 +365,7 @@
   <!-- ── LIVE FEED — physics overlay ──────────────────────────── -->
   <div style="margin-top:16px;">
     <div class="panel">
-      <div class="panel-title">Live Feed — physics overlay</div>
+      <div class="panel-title">Live Feed — physics overlay <span class="demo-feed-inline">(<strong>Z0</strong> stream = matrix top-left · live · ties to <strong>Gate</strong> on <strong>B</strong> grid)</span></div>
       <img id="video-feed" src="/video_feed/0" style="width:100%; border-radius:8px; display:block;"
         onerror="this.style.opacity='0.3'; var el=this; setTimeout(function(){ el.src='/video_feed/0?t='+Date.now(); el.style.opacity='1'; }, 3000);" />
       <div style="font-size:10px; color:#444; margin-top:6px;">
