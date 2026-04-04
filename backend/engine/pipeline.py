@@ -349,15 +349,31 @@ class Pipeline:
         thresholds = self.threshold.get_thresholds(zone_id)
         self.threshold.tick(zone_id)
 
-        # Re-evaluate anomaly: adaptive thresholds + physics (must match detector signals)
-        is_anomaly = (
-            result["clip_score"] > thresholds["clip"] or
-            (self.detector.iforest_fitted and result["iforest_score"] < thresholds["iforest"]) or
-            any(d["class"] != "person" for d in result["yolo_detections"]) or
-            abs(result["divergence"]) > 0.5 or
-            abs(result["curl"]) > 0.5 or
-            result["lyapunov"] > 0.15
-        )
+        # Context-aware anomaly: sensitive with a person present; skeptical in empty rooms (ghost protocol)
+        has_person = any(d["class"] == "person" for d in result.get("yolo_detections", []))
+
+        if not has_person:
+            # GHOST PROTOCOL: empty room — raise thresholds to ignore shadows / auto-exposure flashes
+            is_anomaly = (
+                result["clip_score"] > (thresholds.get("clip", 0.42) + 0.15) or
+                abs(result["divergence"]) > 3.0 or
+                abs(result["curl"]) > 3.0 or
+                result["lyapunov"] > 0.5
+            )
+            if is_anomaly:
+                result["forced_risk"] = "LOW"
+        else:
+            # ACTIVE THREAT PROTOCOL: human present — sensitive physics + CLIP / isolation forest
+            is_anomaly = (
+                result["clip_score"] > thresholds.get("clip", 0.42) or
+                (
+                    self.detector.iforest_fitted
+                    and result.get("iforest_score", 1.0) < thresholds.get("iforest", 0.0)
+                )
+                or abs(result["divergence"]) > 0.5
+                or abs(result["curl"]) > 0.5
+                or result["lyapunov"] > 0.15
+            )
 
         # ── Schrödinger Tracker update ───────────────────────────────
         # A "person" detection in the YOLO list collapses the wavefunction.

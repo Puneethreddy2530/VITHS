@@ -176,25 +176,29 @@ def capture_thread_fn():
 
 # ── Neuromorphic Event Gate ─────────────────────────────────────────
 class NeuromorphicGate:
-    def __init__(self, threshold=15):
-        self.threshold = threshold
+    def __init__(self, w=160, h=120):
+        self.w = w
+        self.h = h
         self.prev_frame_gray = None
         self.sleep_mode = False
 
     def is_motion_event(self, frame):
-        gray = cv2.cvtColor(cv2.resize(frame, (160, 120)), cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (5, 5), 0) 
+        gray = cv2.cvtColor(cv2.resize(frame, (self.w, self.h)), cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
         if self.prev_frame_gray is None:
             self.prev_frame_gray = gray
             return True
-            
+
         diff = cv2.absdiff(gray, self.prev_frame_gray)
         _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
         motion_pixels = cv2.countNonZero(thresh)
         self.prev_frame_gray = gray
-        
-        self.sleep_mode = motion_pixels < (160 * 120 * 0.015) 
-        return not self.sleep_mode
+
+        # Require 4.5% of the frame to change to wake the pipeline (reduces ISO/brightness noise)
+        threshold_pixels = int(self.w * self.h * 0.045)
+        awake = motion_pixels > threshold_pixels
+        self.sleep_mode = not awake
+        return awake
 
 event_gate = NeuromorphicGate()
 
@@ -322,6 +326,8 @@ def build_event(enriched: dict, reasoning: dict) -> dict:
     
     behavior = enriched.get("behavior", "unknown")
     risk_tier = enriched.get("risk_tier", "LOW")
+    if enriched.get("forced_risk") == "LOW":
+        risk_tier = "LOW"
     if behavior == "normal":
         risk_tier = "LOW"
         if isinstance(reasoning, dict):

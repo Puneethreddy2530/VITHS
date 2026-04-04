@@ -68,6 +68,21 @@ class ReasoningEngine:
             self._use_llm = True
             print("  Azure OpenAI reasoning engine ready.")
 
+    def _apply_forced_risk_clamp(self, event: dict, result: dict) -> dict:
+        """Empty-room environmental hits: cap risk and replace dramatic ghost-trigger copy."""
+        if event.get("forced_risk") != "LOW":
+            return result
+        result["risk_level"] = "LOW"
+        reasoning_text = " ".join(
+            [str(result.get("pattern_summary", ""))]
+            + [str(w) for w in (result.get("why_flagged") or [])]
+        )
+        if "Unusual localized movement" in reasoning_text or "No person detected" in reasoning_text:
+            result["pattern_summary"] = (
+                "[SYSTEM LOG] Minor environmental shift (lighting/shadow). No human presence. Ignored."
+            )
+        return result
+
     def _build_prompt(self, event: dict, similar: list, recurrence: int) -> str:
         # Format similar events (past memory recalls)
         past = []
@@ -110,7 +125,8 @@ Respond ONLY with a valid JSON object, no markdown, no explanation outside JSON:
         risk_tier = event.get("risk_tier", "LOW")
 
         if not self._use_llm:
-            return _FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"])
+            out = dict(_FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"]))
+            return self._apply_forced_risk_clamp(event, out)
 
         try:
             prompt   = self._build_prompt(event, similar, recurrence)
@@ -137,11 +153,12 @@ Respond ONLY with a valid JSON object, no markdown, no explanation outside JSON:
             for key in ["risk_level", "pattern_summary", "why_flagged",
                         "predicted_next", "recommended_action"]:
                 result.setdefault(key, "Unknown")
-            return result
+            return self._apply_forced_risk_clamp(event, result)
 
         except Exception as e:
             print(f"  [Azure OpenAI fallback] {e}")
-            return _FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"])
+            out = dict(_FALLBACK_RESPONSES.get(risk_tier, _FALLBACK_RESPONSES["LOW"]))
+            return self._apply_forced_risk_clamp(event, out)
 
     def format_alert_card(self, event: dict, reasoning: dict) -> str:
         """
