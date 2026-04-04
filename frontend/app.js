@@ -27,22 +27,35 @@ let _zoneBehaviors = {};
 let currentFloor = 1; // Default to Ground / Floor 1
 const TOTAL_FLOORS = 16;
 
-/** Parse backend zone ids: F3_Z5 → floor 3, local zone 5; plain "5" → floor 1, zone 5 */
+/**
+ * Map F*_Z* suffix to SVG zone index 0..15.
+ * Z1..Z16 = blocks B1..Gate (1-based, matches mobile zoneNumber = backend+1).
+ * Z0..Z15 = legacy 0-based if ever sent.
+ */
+function zoneIndexFromZNotation(zRaw) {
+  const z = typeof zRaw === 'number' ? zRaw : parseInt(String(zRaw).replace(/^Z/i, ''), 10);
+  if (!Number.isFinite(z)) return null;
+  if (z >= 1 && z <= 16) return z - 1;
+  if (z >= 0 && z <= 15) return z;
+  return null;
+}
+
+/** Parse backend zone ids: F3_Z5 → floor 3, B5 (index 4); plain 5 → floor 1, backend index 5 (B6) */
 function parseFloorZone(raw) {
   if (raw == null) return { floor: currentFloor, localZone: null };
   const s = String(raw).trim();
   if (!s.includes('_')) {
     const n = parseInt(s, 10);
-    return { floor: 1, localZone: Number.isFinite(n) ? n : null };
+    return { floor: 1, localZone: Number.isFinite(n) && n >= 0 && n <= 15 ? n : null };
   }
   const parts = s.split('_');
   const floorStr = parts[0].replace(/^F/i, '');
   const parsedFloor = parseInt(floorStr, 10);
   const zPart = parts[1] || '';
-  const localZone = parseInt(zPart.replace(/^Z/i, ''), 10);
+  const localZone = zoneIndexFromZNotation(zPart);
   return {
     floor: Number.isFinite(parsedFloor) ? parsedFloor : 1,
-    localZone: Number.isFinite(localZone) ? localZone : null,
+    localZone,
   };
 }
 
@@ -342,9 +355,10 @@ function updateQuantumOverlay(quantumField, quantumState, quantumEntropy) {
       if (String(q.zone_id).includes('_')) {
         const parts = String(q.zone_id).split('_');
         floorStr = parts[0].replace(/^F/i, '');
-        localZoneId = parseInt(String(parts[1] || '').replace(/^Z/i, ''), 10);
+        localZoneId = zoneIndexFromZNotation(parts[1] || '');
       } else {
         localZoneId = parseInt(String(q.zone_id), 10);
+        if (!Number.isFinite(localZoneId) || localZoneId < 0 || localZoneId > 15) localZoneId = NaN;
       }
 
       const parsedFloor = parseInt(floorStr, 10);
@@ -1012,6 +1026,40 @@ function resetAllZones() {
     });
 }
 
+/** Open packaged TV wall page; `floor` null = all floors, else 1..TOTAL_FLOORS */
+function getTvDisplayUrl(floor) {
+  const u = new URL('tv_display.html', window.location.href);
+  if (floor != null && floor >= 1 && floor <= TOTAL_FLOORS) u.searchParams.set('floor', String(floor));
+  return u.href;
+}
+
+function wireTvDisplayConnections() {
+  const main = document.getElementById('tv-link-command');
+  if (main) {
+    main.href = getTvDisplayUrl(null);
+    main.title = 'Fullscreen command display — all floors (same WebSocket feed)';
+  }
+  const chips = document.getElementById('tv-floor-chips');
+  if (!chips) return;
+  chips.innerHTML = '';
+  for (let f = 1; f <= TOTAL_FLOORS; f++) {
+    const a = document.createElement('a');
+    a.className = 'tv-floor-chip';
+    a.textContent = `F${f}`;
+    a.href = getTvDisplayUrl(f);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.title = `Wall display locked to floor ${f} only`;
+    chips.appendChild(a);
+  }
+}
+
+function applyInitialFloorFromQuery() {
+  const p = new URLSearchParams(window.location.search);
+  const f = parseInt(p.get('floor') || '', 10);
+  if (Number.isFinite(f) && f >= 1 && f <= TOTAL_FLOORS) currentFloor = f;
+}
+
 function buildFloorSelector() {
   const container = document.getElementById('floor-buttons-container');
   if (!container) return;
@@ -1057,7 +1105,9 @@ function buildFloorSelector() {
 }
 
 function initApp() {
+  applyInitialFloorFromQuery();
   buildFloorSelector();
+  wireTvDisplayConnections();
   loadInitialData();
   connect();
   setInterval(pollStats, 3000);

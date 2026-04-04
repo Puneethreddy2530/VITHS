@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PS-003 — Monitoring Display</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -275,8 +276,8 @@
   <!-- Top bar -->
   <div class="top-bar">
     <div>
-      <div class="title">PS-003 Intrusion Monitor</div>
-      <div class="title-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC</div>
+      <div class="title">PS-003 Intrusion Monitor <span id="tv-floor-tag" style="font-size:14px;-webkit-text-fill-color:#6ee7b7"></span></div>
+      <div class="title-sub">AQHSO · CLIP · FAISS · ST-GCN · PQC · <span id="tv-floor-sub">All floors</span></div>
     </div>
     <div class="pills">
       <div class="pill" id="tp-flow">⚛ Flow</div>
@@ -296,7 +297,7 @@
   <div class="main-body">
     <!-- Left: Heatmap -->
     <div class="heatmap-panel">
-      <div class="panel-title">Zone Heatmap — ST-GCN Propagation</div>
+      <div class="panel-title" id="tv-heatmap-title">Zone Heatmap — ST-GCN Propagation</div>
       <div class="tv-heatmap" id="tv-heatmap"></div>
     </div>
 
@@ -353,6 +354,60 @@
     const WS  = `ws://${window.location.host}/ws/alerts`;
     const RC  = { LOW:'#34d399', MEDIUM:'#f59e0b', HIGH:'#ef4444', CRITICAL:'#a78bfa' };
 
+    const TV_PARAMS = new URLSearchParams(location.search);
+    const TV_FLOOR = (() => {
+      const f = parseInt(TV_PARAMS.get('floor') || '', 10);
+      return (Number.isFinite(f) && f >= 1 && f <= 16) ? f : null;
+    })();
+
+    function zoneIndexFromZNotation(zRaw) {
+      const z = typeof zRaw === 'number' ? zRaw : parseInt(String(zRaw).replace(/^Z/i, ''), 10);
+      if (!Number.isFinite(z)) return null;
+      if (z >= 1 && z <= 16) return z - 1;
+      if (z >= 0 && z <= 15) return z;
+      return null;
+    }
+
+    function parseFloorZoneTv(raw) {
+      if (raw == null) return { floor: 1, localZone: null };
+      const s = String(raw).trim();
+      if (!s.includes('_')) {
+        const n = parseInt(s, 10);
+        return { floor: 1, localZone: Number.isFinite(n) && n >= 0 && n <= 15 ? n : null };
+      }
+      const parts = s.split('_');
+      const floorStr = parts[0].replace(/^F/i, '');
+      const parsedFloor = parseInt(floorStr, 10);
+      const localZone = zoneIndexFromZNotation(parts[1] || '');
+      return {
+        floor: Number.isFinite(parsedFloor) ? parsedFloor : 1,
+        localZone,
+      };
+    }
+
+    function eventMatchesTvFloor(evt) {
+      if (TV_FLOOR == null) return true;
+      const p = parseFloorZoneTv(evt.zone_id);
+      return p.floor === TV_FLOOR && p.localZone != null;
+    }
+
+    (function initTvFloorBanner() {
+      const tag = document.getElementById('tv-floor-tag');
+      const sub = document.getElementById('tv-floor-sub');
+      const ht = document.getElementById('tv-heatmap-title');
+      if (TV_FLOOR != null) {
+        if (tag) tag.textContent = '· F' + TV_FLOOR;
+        if (sub) sub.textContent = 'Floor ' + TV_FLOOR + ' only (same feed, filtered)';
+        if (ht) ht.textContent = 'Zone heatmap — Floor ' + TV_FLOOR;
+        document.title = 'PS-003 — Floor ' + TV_FLOOR + ' Display';
+      } else {
+        if (tag) tag.textContent = '';
+        if (sub) sub.textContent = 'All floors (command wall)';
+        if (ht) ht.textContent = 'Zone Heatmap — ST-GCN Propagation (all floors)';
+        document.title = 'PS-003 — Command Display (all floors)';
+      }
+    })();
+
     // Build heatmap cells
     (function() {
       const g = document.getElementById('tv-heatmap');
@@ -401,7 +456,9 @@
     function updateHeatmap(hm) {
       if (!Array.isArray(hm)) return;
       for (const h of hm) {
-        const z = h.zone_id;
+        const p = parseFloorZoneTv(h.zone_id);
+        if (TV_FLOOR != null && (p.floor !== TV_FLOOR || p.localZone == null)) continue;
+        const z = TV_FLOOR != null ? p.localZone : h.zone_id;
         const cell = document.getElementById('tvz-' + z);
         const rEl  = document.getElementById('tvr-' + z);
         if (!cell || !rEl) continue;
@@ -423,7 +480,24 @@
 
     function updateQuantum(qf, qs) {
       if (!Array.isArray(qf)) return;
-      qf.forEach(({zone_id, probability}) => {
+      const rows = [];
+      qf.forEach(q => {
+        let floorStr = '1';
+        let lid = q.zone_id;
+        if (String(q.zone_id).includes('_')) {
+          const parts = String(q.zone_id).split('_');
+          floorStr = parts[0].replace(/^F/i, '');
+          lid = zoneIndexFromZNotation(parts[1] || '');
+        } else {
+          lid = parseInt(String(q.zone_id), 10);
+          if (!Number.isFinite(lid) || lid < 0 || lid > 15) lid = NaN;
+        }
+        const pf = parseInt(floorStr, 10);
+        if (TV_FLOOR != null && pf !== TV_FLOOR) return;
+        if (!Number.isFinite(lid)) return;
+        rows.push({ zone_id: lid, probability: Number(q.probability) || 0 });
+      });
+      rows.forEach(({zone_id, probability}) => {
         const ov = document.getElementById('tvqo-' + zone_id);
         const ps = document.getElementById('tvp-' + zone_id);
         const cell = document.getElementById('tvz-' + zone_id);
@@ -481,7 +555,9 @@
     }
 
     function updateZoneBehavior(evt) {
-      const z = evt.zone_id;
+      const p = parseFloorZoneTv(evt.zone_id);
+      const z = p.localZone;
+      if (z == null) return;
       const risk = evt.risk_tier || 'LOW';
       const beh = evt.behavior || '';
       const traj = evt.trajectory || {};
@@ -532,6 +608,7 @@
       .catch(() => {});
 
     function processEvent(evt) {
+      if (!eventMatchesTvFloor(evt)) return;
       tickerEvents.unshift(evt);
       if (tickerEvents.length > MAX_TICKER) tickerEvents.pop();
       updateTicker();

@@ -70,6 +70,65 @@ body {
 }
 #status-text { font-size: 11px; color: #888; }
 
+/* ── TV wall display links (main + per-floor) ───────────────── */
+.tv-display-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #0e0e14;
+  border: 1px solid #1e1e2a;
+  border-radius: 10px;
+}
+.tv-display-bar-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #6ee7b7;
+}
+.tv-display-bar-sublabel {
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tv-display-bar-sep { color: #333; font-size: 12px; }
+.tv-display-main-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: #60a5fa;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.tv-display-main-link:hover {
+  color: #93c5fd;
+  border-bottom-color: #60a5fa55;
+}
+.tv-floor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.tv-floor-chip {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #16161e;
+  border: 1px solid #2a2a38;
+  color: #888;
+  text-decoration: none;
+}
+.tv-floor-chip:hover {
+  color: #34d399;
+  border-color: #34d39944;
+  background: rgba(52, 211, 153, 0.08);
+}
+
 /* ── Feature Showcase Strip ────────────────────────────────── */
 .feature-strip {
   display: flex;
