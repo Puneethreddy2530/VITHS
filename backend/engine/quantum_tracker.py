@@ -71,13 +71,7 @@ class SchrodingerTracker:
     def _build_adjacency(self) -> dict:
         adj = {}
         for z in range(self.n):
-            r, c   = divmod(z, self.gw)
-            nbrs   = []
-            if c > 0:              nbrs.append(z - 1)         # left
-            if c < self.gw - 1:   nbrs.append(z + 1)         # right
-            if r > 0:              nbrs.append(z - self.gw)   # above
-            if r < self.gw - 1:   nbrs.append(z + self.gw)   # below
-            adj[z] = nbrs
+            adj[z] = [(z - 1) % self.n, (z + 1) % self.n]
         return adj
 
     # ── Wavefunction operations ────────────────────────────────────

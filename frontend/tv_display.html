@@ -360,9 +360,10 @@
         const c = document.createElement('div');
         c.className = 'tv-zone';
         c.id = 'tvz-' + i;
+        const name = i === 0 ? 'Gate' : 'B' + i;
         c.innerHTML = `
           <div class="q-overlay" id="tvqo-${i}"></div>
-          <div class="zone-id">B${i+1}</div>
+          <div class="zone-id">${name}</div>
           <div class="zone-risk-label" id="tvr-${i}" style="color:#34d399">LOW</div>
           <div class="zone-beh" id="tvb-${i}"></div>
           <div class="zone-psi" id="tvp-${i}"></div>

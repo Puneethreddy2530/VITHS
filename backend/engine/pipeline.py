@@ -14,28 +14,7 @@ from datetime import datetime
 from collections import defaultdict, deque
 from typing import Optional
 
-# ── D1 hex ring — zone neighbours for ST-GCN propagation ─────────
-#  Matches frontend/app.js ZONE_ADJ (B1..B2 clockwise, Gate=15).
-#  Undirected: symmetric closure of the UI graph so alerts propagate
-#  both ways along shared borders (adds B1↔B10 vs one-way UI list).
-ADJACENCY: dict[int, list[int]] = {
-    0:  [1, 9, 15],   # B1
-    1:  [0, 2],       # B2
-    2:  [1, 3],       # B3
-    3:  [2, 4],       # B4
-    4:  [3, 5],       # B5
-    5:  [4, 6],       # B6
-    6:  [5, 7],       # B7
-    7:  [6, 8],       # B8
-    8:  [7, 10],      # B9
-    9:  [0, 10],      # B10
-    10: [8, 9, 11],   # B11 (+ bottom centre strip)
-    11: [10, 12],     # B12
-    12: [11, 13],     # B13
-    13: [12, 14],     # B14
-    14: [13, 15],     # B15
-    15: [0, 14],      # Gate
-}
+ADJACENCY: dict[int, list[int]] = {i: [(i - 1) % 16, (i + 1) % 16] for i in range(16)}
 
 
 # ══════════════════════════════════════════════════════════════════

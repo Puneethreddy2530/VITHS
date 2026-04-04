@@ -76,35 +76,28 @@ function resetPerFloorZoneOverlays() {
 
 /* ── SVG Zone Definitions — Doubled B1/B2 & matching B9/B10; grid-aligned to outer/inner hex ─ */
 const ZONE_DEFS = [
-  // Top — each 340px outer span (2× prior ~170); inner edge 320–500 / 500–680
-  { id:0,  pts:"160,100 500,100 500,220 320,220",    label:"B1", cat:"north",  cx:370, cy:160 },
-  { id:1,  pts:"500,100 840,100 680,220 500,220",    label:"B2", cat:"north",  cx:630, cy:160 },
-
-  // Right flank — thirds along outer (840,100)→(900,450)→(840,880) with matching inner
-  { id:2,  pts:"840,100 860,217 693,297 680,220",    label:"B3", cat:"corner", cx:768, cy:204 },
-  { id:3,  pts:"860,217 880,333 707,373 693,297",    label:"B4", cat:"east",   cx:785, cy:305 },
-  { id:4,  pts:"880,333 900,450 720,450 707,373",    label:"B5", cat:"east",   cx:802, cy:364 },
-  { id:5,  pts:"900,450 893,548 714,553 720,450",    label:"B6", cat:"east",   cx:807, cy:428 },
-  { id:6,  pts:"893,548 887,645 707,656 714,553",    label:"B7", cat:"east",   cx:800, cy:500 },
-  { id:7,  pts:"887,645 840,880 680,760 707,656",    label:"B8", cat:"corner", cx:779, cy:765 },
-
-  // Bottom — B9/B10 outer width = 5/8 of B1/B2 (340×5/8 ≈ 212.5); center strip merged into B11
-  { id:8,  pts:"628,880 840,880 680,760 568,760",    label:"B9", cat:"south",  cx:679, cy:820 },
-  { id:9,  pts:"160,880 373,880 433,760 320,760",    label:"B10", cat:"south",  cx:322, cy:820 },
-
-  // Left flank + bottom center (between B10 and B9); inner x from linear map outer→inner
-  { id:10, pts:"373,880 628,880 568,760 433,760 320,760 307,657 140,737 160,880", label:"B11", cat:"corner", cx:353, cy:804 },
-  { id:11, pts:"140,737 120,593 293,553 307,657",    label:"B12", cat:"west",   cx:215, cy:645 },
-  { id:12, pts:"120,593 100,450 280,450 293,553",    label:"B13", cat:"west",   cx:198, cy:522 },
-  { id:13, pts:"100,450 120,361 293,373 280,450",    label:"B14", cat:"west",   cx:198, cy:406 },
-  { id:14, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:215, cy:326 },
-  { id:15, pts:"140,272 160,100 320,220 307,297",    label:"Gate", cat:"entrance", cx:232, cy:197 },
+  { id:0,  pts:"140,272 160,100 320,220 307,297",    label:"Gate", cat:"entrance", cx:232, cy:197 },
+  { id:1,  pts:"160,100 500,100 500,220 320,220",    label:"B1", cat:"north",  cx:370, cy:160 },
+  { id:2,  pts:"500,100 840,100 680,220 500,220",    label:"B2", cat:"north",  cx:630, cy:160 },
+  { id:3,  pts:"840,100 860,217 693,297 680,220",    label:"B3", cat:"corner", cx:768, cy:204 },
+  { id:4,  pts:"860,217 880,333 707,373 693,297",    label:"B4", cat:"east",   cx:785, cy:305 },
+  { id:5,  pts:"880,333 900,450 720,450 707,373",    label:"B5", cat:"east",   cx:802, cy:364 },
+  { id:6,  pts:"900,450 893,548 714,553 720,450",    label:"B6", cat:"east",   cx:807, cy:428 },
+  { id:7,  pts:"893,548 887,645 707,656 714,553",    label:"B7", cat:"east",   cx:800, cy:500 },
+  { id:8,  pts:"887,645 840,880 680,760 707,656",    label:"B8", cat:"corner", cx:779, cy:765 },
+  { id:9,  pts:"628,880 840,880 680,760 568,760",    label:"B9", cat:"south",  cx:679, cy:820 },
+  { id:10, pts:"373,880 628,880 568,760 433,760 320,760 307,657 140,737 160,880", label:"B10", cat:"corner", cx:353, cy:804 },
+  { id:11, pts:"160,880 373,880 433,760 320,760",    label:"B11", cat:"south",  cx:322, cy:820 },
+  { id:12, pts:"140,737 120,593 293,553 307,657",    label:"B12", cat:"west",   cx:215, cy:645 },
+  { id:13, pts:"120,593 100,450 280,450 293,553",    label:"B13", cat:"west",   cx:198, cy:522 },
+  { id:14, pts:"100,450 120,361 293,373 280,450",    label:"B14", cat:"west",   cx:198, cy:406 },
+  { id:15, pts:"120,361 140,272 307,297 293,373",    label:"B15", cat:"corner", cx:215, cy:326 },
 ];
 
 // Undirected ring; keep in sync with backend/engine/pipeline.py ADJACENCY
 const ZONE_ADJ = {
-  0:[1,9,15], 1:[0,2], 2:[1,3], 3:[2,4], 4:[3,5], 5:[4,6], 6:[5,7], 7:[6,8],
-  8:[7,10], 9:[0,10], 10:[8,9,11], 11:[10,12], 12:[11,13], 13:[12,14], 14:[13,15], 15:[0,14]
+  0:[15, 1], 1:[0, 2], 2:[1, 3], 3:[2, 4], 4:[3, 5], 5:[4, 6], 6:[5, 7], 7:[6, 8],
+  8:[7, 9], 9:[8, 10], 10:[9, 11], 11:[10, 12], 12:[11, 13], 13:[12, 14], 14:[13, 15], 15:[14, 0]
 };
 
 /* ── Zone runtime state ───────────────────────────────────── */
