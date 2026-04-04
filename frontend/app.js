@@ -115,8 +115,43 @@ const ZONE_ADJ = {
   8:[7, 9], 9:[8, 10], 10:[9, 11], 11:[10, 12], 12:[11, 13], 13:[12, 14], 14:[13, 15], 15:[14, 0]
 };
 
-/* Zone index → CCTV tile id (index.html); ids are legacy labels, not zone numbers */
-const CCTV_TILE_ID_BY_ZONE = { 1: 'cctv-0', 5: 'cctv-4', 0: 'cctv-15', 8: 'cctv-7' };
+/* Backend streams: Z0 live, Z4 corridor file, Z7 parking file, Z15 gate file — map any map zone → nearest stream (ring adjacency) */
+const CAMERA_STREAM_ZONES = [0, 4, 7, 15];
+const STREAM_ZONE_TO_CCTV_TILE_ID = { 0: 'cctv-0', 4: 'cctv-4', 7: 'cctv-7', 15: 'cctv-15' };
+
+function _bfsDistFrom(start) {
+  const dist = { [start]: 0 };
+  const q = [start];
+  while (q.length) {
+    const u = q.shift();
+    const d = dist[u];
+    for (const v of ZONE_ADJ[u] || []) {
+      if (dist[v] === undefined) {
+        dist[v] = d + 1;
+        q.push(v);
+      }
+    }
+  }
+  return dist;
+}
+
+const MAP_ZONE_TO_NEAREST_STREAM = (() => {
+  const out = {};
+  for (let z = 0; z < 16; z++) {
+    let best = 0;
+    let bestD = 999;
+    for (const s of CAMERA_STREAM_ZONES) {
+      const D = _bfsDistFrom(s);
+      const d = D[z];
+      if (d !== undefined && d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    out[z] = best;
+  }
+  return out;
+})();
 
 function resetCctvMatrixFeeds() {
   document.querySelectorAll('.cctv-feed').forEach((feed) => {
@@ -135,13 +170,57 @@ function syncCctvMatrixThreat(evt, risk) {
   if (risk !== 'HIGH' && risk !== 'CRITICAL') return;
   if (pz.localZone == null) return;
 
-  const tileId = CCTV_TILE_ID_BY_ZONE[pz.localZone];
+  const streamZ = MAP_ZONE_TO_NEAREST_STREAM[pz.localZone];
+  const tileId = streamZ !== undefined ? STREAM_ZONE_TO_CCTV_TILE_ID[streamZ] : null;
   const targetCam = tileId ? document.getElementById(tileId) : null;
   if (targetCam) {
     targetCam.classList.add('threat-active');
     const statusEl = targetCam.querySelector('.cctv-status');
     if (statusEl) statusEl.textContent = 'THREAT DETECTED';
   }
+}
+
+function cctvPauseFeed(feed) {
+  const img = feed.querySelector('.cctv-stream-img');
+  const cv = feed.querySelector('.cctv-freeze-canvas');
+  if (!img || !cv) return;
+  const ctx = cv.getContext('2d');
+  const w = Math.max(1, img.clientWidth || img.naturalWidth || 640);
+  const h = Math.max(1, img.clientHeight || img.naturalHeight || 360);
+  cv.width = w;
+  cv.height = h;
+  try {
+    ctx.drawImage(img, 0, 0, w, h);
+  } catch (_) {
+    return;
+  }
+  cv.hidden = false;
+  feed.classList.add('is-paused');
+}
+
+function cctvResetFeed(feed) {
+  const img = feed.querySelector('.cctv-stream-img');
+  const cv = feed.querySelector('.cctv-freeze-canvas');
+  const z = feed.getAttribute('data-stream-zone');
+  feed.classList.remove('is-paused');
+  if (cv) cv.hidden = true;
+  if (img && z != null && z !== '') {
+    img.src = `/video_feed/${z}?t=${Date.now()}`;
+  }
+}
+
+function wireCctvToolbar() {
+  const root = document.getElementById('cctv-matrix-root');
+  if (!root) return;
+  root.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cctv-btn');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    const feed = btn.closest('.cctv-feed');
+    if (!feed) return;
+    if (action === 'pause') cctvPauseFeed(feed);
+    else if (action === 'reset') cctvResetFeed(feed);
+  });
 }
 
 /* ── Zone runtime state ───────────────────────────────────── */
@@ -207,7 +286,7 @@ function scoreToFill(score, risk) {
 }
 
 function scoreToStroke(score, risk) {
-  if (risk === 'HIGH')   return 'rgba(239,68,68,0.6)';
+  if (risk === 'HIGH' || risk === 'CRITICAL') return 'rgba(239,68,68,0.65)';
   if (risk === 'MEDIUM') return 'rgba(245,158,11,0.4)';
   return 'rgba(52,211,153,0.2)';
 }
@@ -227,13 +306,74 @@ function updateHeatmap(heatmap) {
     const score = Math.min(1, h.score || 0);
     _zoneState[z] = { ..._zoneState[z], score, risk };
 
-    poly.style.fill = 'transparent';
+    poly.style.fill = scoreToFill(score, risk);
     poly.style.stroke = scoreToStroke(score, risk);
-    poly.classList.toggle('risk-HIGH', risk === 'HIGH');
+    poly.classList.toggle('risk-HIGH', risk === 'HIGH' || risk === 'CRITICAL');
 
     if (lbl) {
       lbl.textContent = risk;
       lbl.style.fill = (RISK_COLOR[risk] || '#666') + '99';
+    }
+  }
+  renderPixelHeatmap();
+}
+
+/** Merge live alert tier onto map + neighbors so heatmap follows the detecting zone (ST-GCN ring) */
+function applyEventHeatBoost(evt) {
+  if (!evt) return;
+  const pz = parseFloorZone(evt.zone_id);
+  if (pz.floor !== currentFloor || pz.localZone == null) return;
+
+  const r = String((evt.reasoning && evt.reasoning.risk_level) || evt.risk_tier || 'LOW').toUpperCase();
+  let boostScore = 0;
+  let boostRisk = 'LOW';
+  if (r === 'CRITICAL') {
+    boostScore = 1;
+    boostRisk = 'CRITICAL';
+  } else if (r === 'HIGH') {
+    boostScore = 0.9;
+    boostRisk = 'HIGH';
+  } else if (r === 'MEDIUM' || r === 'MODERATE') {
+    boostScore = 0.45;
+    boostRisk = 'MEDIUM';
+  } else {
+    renderPixelHeatmap();
+    return;
+  }
+
+  const z = pz.localZone;
+  const cur = _zoneState[z]?.score || 0;
+  if (boostScore > cur) {
+    _zoneState[z] = { ..._zoneState[z], score: boostScore, risk: boostRisk };
+    const poly = document.getElementById('zpoly-' + z);
+    const lbl = document.getElementById('zlbl-' + z);
+    if (poly) {
+      poly.style.fill = scoreToFill(boostScore, boostRisk);
+      poly.style.stroke = scoreToStroke(boostScore, boostRisk);
+      poly.classList.toggle('risk-HIGH', boostRisk === 'HIGH' || boostRisk === 'CRITICAL');
+    }
+    if (lbl) {
+      lbl.textContent = boostRisk;
+      lbl.style.fill = (RISK_COLOR[boostRisk] || '#666') + '99';
+    }
+  }
+
+  const propScale = boostRisk === 'CRITICAL' ? 0.52 : boostRisk === 'HIGH' ? 0.42 : 0.3;
+  for (const n of ZONE_ADJ[z] || []) {
+    const pScore = Math.min(1, boostScore * propScale);
+    if ((_zoneState[n]?.score || 0) < pScore) {
+      const nr = 'MEDIUM';
+      _zoneState[n] = { ..._zoneState[n], score: pScore, risk: nr };
+      const poly = document.getElementById('zpoly-' + n);
+      const lbl = document.getElementById('zlbl-' + n);
+      if (poly) {
+        poly.style.fill = scoreToFill(pScore, nr);
+        poly.style.stroke = scoreToStroke(pScore, nr);
+      }
+      if (lbl) {
+        lbl.textContent = nr;
+        lbl.style.fill = (RISK_COLOR.MEDIUM || '#f59e0b') + '99';
+      }
     }
   }
   renderPixelHeatmap();
@@ -321,29 +461,37 @@ function renderPixelHeatmap() {
   ctx.clip("evenodd");
   // -------------------------------------------------
 
-  // Configuration
   const PIXEL_SIZE = 18;
-  const SIGMA = 120;
 
   const cols = Math.ceil(canvas.width / PIXEL_SIZE);
   const rows = Math.ceil(canvas.height / PIXEL_SIZE);
 
-  // Pre-fetch the current probabilities to avoid repeated lookups
-  const activeZones = ZONE_DEFS.map(z => {
-    return {
-      cx: z.cx,
-      cy: z.cy,
-      psi: _zoneState[z.id]?.psi || 0,
-      score: _zoneState[z.id]?.score || 0
-    };
-  }).filter(z => z.psi > 0.01 || z.score > 0.1);
+  const sources = [];
+  for (const z of ZONE_DEFS) {
+    const st = _zoneState[z.id] || {};
+    let w = Math.max((st.psi || 0) * 2.2, st.score || 0);
+    const rr = String(st.risk || 'LOW').toUpperCase();
+    if (rr === 'CRITICAL') w *= 1.28;
+    else if (rr === 'HIGH') w *= 1.12;
+    else if (rr === 'MEDIUM' || rr === 'MODERATE') w *= 1.06;
+    if (w < 0.022) continue;
 
-  if (activeZones.length === 0) {
-    ctx.restore(); // Make sure to restore before returning early!
+    const sigma0 = rr === 'CRITICAL' ? 86 : rr === 'HIGH' ? 98 : rr === 'MEDIUM' || rr === 'MODERATE' ? 112 : 124;
+    sources.push({ cx: z.cx, cy: z.cy, weight: w, sigma: sigma0 });
+
+    const prop = w * (rr === 'CRITICAL' ? 0.5 : rr === 'HIGH' ? 0.4 : 0.32);
+    for (const nid of ZONE_ADJ[z.id] || []) {
+      const nz = ZONE_DEFS.find(d => d.id === nid);
+      if (!nz || prop < 0.018) continue;
+      sources.push({ cx: nz.cx, cy: nz.cy, weight: prop, sigma: 140 });
+    }
+  }
+
+  if (sources.length === 0) {
+    ctx.restore();
     return;
   }
 
-  // Loop through every pixel in the grid
   for (let x = 0; x < cols; x++) {
     for (let y = 0; y < rows; y++) {
       const px = x * PIXEL_SIZE + (PIXEL_SIZE / 2);
@@ -351,19 +499,18 @@ function renderPixelHeatmap() {
 
       let pixelProbability = 0;
 
-      for (const zone of activeZones) {
-        const dx = px - zone.cx;
-        const dy = py - zone.cy;
+      for (const src of sources) {
+        const dx = px - src.cx;
+        const dy = py - src.cy;
         const distSq = dx * dx + dy * dy;
-
-        const influence = Math.exp(-distSq / (2 * SIGMA * SIGMA));
-        const weight = Math.max(zone.psi * 2.0, zone.score);
-        pixelProbability += influence * weight;
+        const sig = src.sigma;
+        const influence = Math.exp(-distSq / (2 * sig * sig));
+        pixelProbability += influence * src.weight;
       }
 
-      if (pixelProbability > 0.05) {
+      if (pixelProbability > 0.038) {
         const t = Math.min(1.0, pixelProbability);
-        ctx.fillStyle = getInfernoColor(t, 0.75 + (t * 0.25));
+        ctx.fillStyle = getInfernoColor(t, 0.72 + (t * 0.28));
         ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE - 1, PIXEL_SIZE - 1);
       }
     }
@@ -1046,6 +1193,7 @@ function handleSystemReset() {
   const lp = document.getElementById('traj-label-pill');
   if (lp) { lp.textContent = 'Normal path'; lp.style.background = '#0e1e12'; lp.style.color = '#34d399'; }
   resetCctvMatrixFeeds();
+  document.querySelectorAll('.cctv-feed.is-paused').forEach((feed) => cctvResetFeed(feed));
   renderPixelHeatmap();
 }
 
@@ -1196,6 +1344,7 @@ function buildFloorSelector() {
         syncCctvMatrixThreat(_latestEvent, lrisk);
       }
       if (_latestEvent && Array.isArray(_latestEvent.heatmap)) updateHeatmap(_latestEvent.heatmap);
+      if (_latestEvent) applyEventHeatBoost(_latestEvent);
       if (_latestEvent && Array.isArray(_latestEvent.quantum_field)) {
         updateQuantumOverlay(
           _latestEvent.quantum_field,
@@ -1217,6 +1366,7 @@ function initApp() {
   applyInitialFloorFromQuery();
   buildFloorSelector();
   wireTvDisplayConnections();
+  wireCctvToolbar();
   loadInitialData();
   connect();
   setInterval(pollStats, 3000);
@@ -1233,6 +1383,7 @@ function loadInitialData() {
       const latest = evts[0];
       _latestEvent = latest;
       if (Array.isArray(latest.heatmap)) updateHeatmap(latest.heatmap);
+      applyEventHeatBoost(latest);
       if (latest.quantum)                updateQuantum(latest.quantum);
       if (latest.quantum_field)          updateQuantumOverlay(latest.quantum_field, latest.quantum_state, latest.quantum_entropy);
       renderAlertCard(latest);
@@ -1293,6 +1444,7 @@ function connect() {
     _latestEvent = evt;
     addEventRow(evt);
     if (Array.isArray(evt.heatmap)) updateHeatmap(evt.heatmap);
+    applyEventHeatBoost(evt);
     if (evt.quantum)                updateQuantum(evt.quantum);
     if (evt.quantum_field)          updateQuantumOverlay(evt.quantum_field, evt.quantum_state, evt.quantum_entropy);
     renderAlertCard(evt);

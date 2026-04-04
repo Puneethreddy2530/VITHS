@@ -108,40 +108,68 @@
       </div>
     </div>
     <div class="cctv-matrix" id="cctv-matrix-root">
-      <div class="cctv-feed" id="cctv-0">
+      <div class="cctv-feed" id="cctv-0" data-stream-zone="0">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 01 // ZONE B1</span>
+          <span class="cctv-label">LIVE // Z0 · patrol</span>
           <span class="cctv-status">OK</span>
         </div>
-        <img src="/video_feed/0" alt="Stream 0"
-          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/0?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+        <div class="cctv-toolbar">
+          <button type="button" class="cctv-btn" data-action="pause" data-zone="0" aria-label="Pause">Pause</button>
+          <button type="button" class="cctv-btn" data-action="reset" data-zone="0" aria-label="Reset stream">Reset</button>
+        </div>
+        <div class="cctv-media">
+          <img src="/video_feed/0" alt="Stream 0" class="cctv-stream-img"
+            onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/0?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+          <canvas class="cctv-freeze-canvas" width="640" height="360" hidden aria-hidden="true"></canvas>
+        </div>
       </div>
 
-      <div class="cctv-feed" id="cctv-4">
+      <div class="cctv-feed" id="cctv-4" data-stream-zone="4">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 02 // ZONE B5</span>
+          <span class="cctv-label">FILE // Z4 · corridor</span>
           <span class="cctv-status">OK</span>
         </div>
-        <img src="/video_feed/4" alt="Stream 4"
-          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/4?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+        <div class="cctv-toolbar">
+          <button type="button" class="cctv-btn" data-action="pause" data-zone="4">Pause</button>
+          <button type="button" class="cctv-btn" data-action="reset" data-zone="4">Reset</button>
+        </div>
+        <div class="cctv-media">
+          <img src="/video_feed/4" alt="Stream 4" class="cctv-stream-img"
+            onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/4?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+          <canvas class="cctv-freeze-canvas" width="640" height="360" hidden aria-hidden="true"></canvas>
+        </div>
       </div>
 
-      <div class="cctv-feed" id="cctv-15">
+      <div class="cctv-feed" id="cctv-15" data-stream-zone="15">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 03 // MAIN GATE</span>
+          <span class="cctv-label">FILE // Z15 · gate</span>
           <span class="cctv-status">OK</span>
         </div>
-        <img src="/video_feed/15" alt="Stream 15"
-          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/15?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+        <div class="cctv-toolbar">
+          <button type="button" class="cctv-btn" data-action="pause" data-zone="15">Pause</button>
+          <button type="button" class="cctv-btn" data-action="reset" data-zone="15">Reset</button>
+        </div>
+        <div class="cctv-media">
+          <img src="/video_feed/15" alt="Stream 15" class="cctv-stream-img"
+            onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/15?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+          <canvas class="cctv-freeze-canvas" width="640" height="360" hidden aria-hidden="true"></canvas>
+        </div>
       </div>
 
-      <div class="cctv-feed" id="cctv-7">
+      <div class="cctv-feed" id="cctv-7" data-stream-zone="7">
         <div class="cctv-overlay">
-          <span class="cctv-label">CAM 04 // ZONE B8</span>
+          <span class="cctv-label">FILE // Z7 · parking</span>
           <span class="cctv-status">OK</span>
         </div>
-        <img src="/video_feed/7" alt="Stream 7"
-          onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/7?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+        <div class="cctv-toolbar">
+          <button type="button" class="cctv-btn" data-action="pause" data-zone="7">Pause</button>
+          <button type="button" class="cctv-btn" data-action="reset" data-zone="7">Reset</button>
+        </div>
+        <div class="cctv-media">
+          <img src="/video_feed/7" alt="Stream 7" class="cctv-stream-img"
+            onerror="this.style.opacity='0.3'; setTimeout(() => { this.src='/video_feed/7?t='+Date.now(); this.style.opacity='1'; }, 3000);" />
+          <canvas class="cctv-freeze-canvas" width="640" height="360" hidden aria-hidden="true"></canvas>
+        </div>
       </div>
     </div>
   </div>

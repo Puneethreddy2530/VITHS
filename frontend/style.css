@@ -452,21 +452,23 @@ body {
 .alert-waiting { color: #555; font-size: 13px; }
 .alert-split {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 16px;
-  min-height: 140px;
+  grid-template-columns: 1.4fr 0.85fr;
+  gap: 10px;
+  min-height: 0;
+  max-height: 38vh;
+  overflow-y: auto;
 }
 .alert-left {}
 .alert-right {
   background: #0e0e16;
-  border-radius: 10px;
-  padding: 14px;
+  border-radius: 8px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   border: 1px solid #1e1e2a;
 }
-.alert-header  { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.alert-header  { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
 .risk-pill {
   color: #fff;
   padding: 2px 10px;
@@ -506,13 +508,13 @@ body {
 
 /* Alert right-side elements */
 .risk-badge-large {
-  font-size: 18px;
-  font-weight: 800;
-  padding: 6px 16px;
-  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
   text-align: center;
   color: #fff;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 .alert-right .meta-line {
   font-size: 10px;
@@ -759,26 +761,36 @@ body.alert-mode > *:not(.main-grid) {
   100% { r: 150px; opacity: 0; stroke-width: 0; }
 }
 
-/* ── DOMINANT ALERT POPUP -> CHANGED TO SIDE TOAST ─────────────── */
+/* ── Critical alert: compact corner toast (not a large modal) ─── */
 .alert-critical {
   position: fixed !important;
-  bottom: 20px !important;
-  right: 20px !important;
+  bottom: 16px !important;
+  right: 16px !important;
+  left: auto !important;
+  top: auto !important;
   transform: none !important;
-  width: 420px !important; /* Smaller width for side popup */
+  width: min(300px, calc(100vw - 32px)) !important;
+  max-height: min(42vh, 320px) !important;
+  overflow: hidden !important;
   z-index: 10000;
-  box-shadow: 0 8px 32px rgba(239,68,68,0.3) !important;
-  border: 1px solid rgba(239,68,68,0.8) !important;
-  background: rgba(10,10,15,0.95) !important;
-  backdrop-filter: blur(16px);
-  border-radius: 12px;
-  animation: slideInAlert 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 6px 24px rgba(239,68,68,0.25) !important;
+  border: 1px solid rgba(239,68,68,0.65) !important;
+  background: rgba(10,10,15,0.97) !important;
+  backdrop-filter: blur(12px);
+  border-radius: 10px;
+  padding: 8px 10px !important;
+  animation: slideInAlert 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* Stack the columns vertically so it fits nicely in the smaller width */
+.alert-critical .card-title {
+  display: none !important;
+}
+
 .alert-critical .alert-split {
   grid-template-columns: 1fr !important;
-  gap: 10px;
+  gap: 6px !important;
+  max-height: min(36vh, 280px);
+  overflow-y: auto;
 }
 
 @keyframes slideInAlert {
@@ -790,14 +802,16 @@ body.alert-mode > *:not(.main-grid) {
   font-family: 'Inter', monospace;
   color: #fca5a5;
   white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.5;
-  margin-bottom: 10px;
-  min-height: 65px;
-  border-left: 3px solid #ef4444;
-  padding-left: 14px;
+  font-size: 11px;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  min-height: 0;
+  max-height: 7.5em;
+  overflow-y: auto;
+  border-left: 2px solid #ef4444;
+  padding-left: 8px;
   font-weight: 600;
-  text-shadow: 0 0 10px rgba(239,68,68,0.4);
+  text-shadow: none;
 }
 
 /* ── Vertical Floor Selector ──────────────── */
@@ -913,12 +927,60 @@ body.alert-mode > *:not(.main-grid) {
   aspect-ratio: 16 / 9;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
+.cctv-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 .cctv-feed img, .cctv-feed video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
   filter: grayscale(40%) contrast(1.1);
+}
+.cctv-freeze-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cctv-feed.is-paused .cctv-stream-img {
+  visibility: hidden;
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.cctv-toolbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 6px 8px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+  z-index: 12;
+  pointer-events: auto;
+}
+.cctv-btn {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(20,20,28,0.9);
+  color: #e4e4e7;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cctv-btn:hover {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: #34d399;
+  color: #fff;
 }
 .cctv-overlay {
   position: absolute;
